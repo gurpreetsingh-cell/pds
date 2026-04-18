@@ -75,7 +75,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 .btn-logout:hover{border-color:var(--rd);color:var(--rd)}
 
 /* STATS BAR */
-.stats-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bd);border-bottom:1px solid var(--bd)}
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--bd);border-bottom:1px solid var(--bd)}
 .stat{background:var(--sf);padding:14px 20px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
 .stat::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:transparent;transition:background .2s}
 .stat:hover{background:var(--sf2)}
@@ -94,7 +94,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 .stat-sub{font-size:10px;color:var(--mt)}
 
 /* MAIN */
-.main{display:flex;height:calc(100vh - 130px)}
+.main{display:flex;min-height:calc(100vh - 150px);height:auto;}
 
 /* SIDEBAR - hidden */
 .sidebar{display:none}
@@ -355,8 +355,11 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
   @media screen and (max-width: 990px) {
     header{padding:10px 14px;}
     .hdr-right{gap:6px;}
-    .stats-bar{grid-template-columns:repeat(2,1fr);}
+    .stats-bar{grid-template-columns:repeat(2,1fr) !important;}
     .stat{padding:12px 14px;}
+    .stat-icon{width:40px;height:40px;font-size:18px;}
+    .stat-info{gap:6px;}
+    .sv{font-size:26px;}
     .table-hdr{padding:10px 12px;}
     .table-title{font-size:12px;}
     .srch{width:100%;max-width:100%;}
@@ -375,7 +378,11 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
     header{flex-direction:column;align-items:stretch;gap:10px;}
     .logo{justify-content:center;}
     .hdr-right{justify-content:center;width:100%;}
-    .stats-bar{grid-template-columns:1fr;}
+    .stats-bar{grid-template-columns:1fr !important;}
+    .stat{padding:12px 14px;}
+    .stat-icon{width:40px;height:40px;font-size:18px;}
+    .stat-info{gap:6px;}
+    .sv{font-size:24px;}
     .ship-tabs{gap:4px;}
     .table-hdr{flex-direction:column;align-items:stretch;}
     .filter-bar{justify-content:flex-start;}
@@ -383,11 +390,12 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
     .srch{width:100%;}
     .f-clear,.f-dl-btn{width:100%;}
     .table-scroll{overflow-x:auto;}
-    table{min-width:780px;}
+    table{min-width:680px;}
     th{font-size:8px;}
     td{font-size:10px;}
     .type-opt{font-size:10px;padding:9px 6px;}
     .m-save{width:100%;}
+    .hdr-btn{flex:1;min-width:0;}
     .toast{min-width:auto;width:calc(100vw - 20px);right:10px;left:10px;}
     .an-tat-donut{flex-direction:column;align-items:center;}
     .an-bar-row{flex-direction:column;align-items:flex-start;}
@@ -461,7 +469,7 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
 </header>
 
 <!-- STATS BAR -->
-<div class="stats-bar" style="grid-template-columns:repeat(4,1fr)">
+<div class="stats-bar">
   <div class="stat s-total" onclick="filterStat('all',this)">
     <div class="stat-icon ic-total">📋</div>
     <div class="stat-info">
