@@ -1040,6 +1040,7 @@ function doLogin(){
   if(user.role==='admin') document.getElementById('mgrBtn').style.display='';
   if(user.role==='urbanic'){ document.getElementById('exportWrap').style.display='none'; document.getElementById('mgrBtn').style.display='none'; }
   else { document.getElementById('exportWrap').style.display=''; }
+  resetFilters();
   hideAnalytics();
   activeTab='all';
   document.getElementById('tableTitle').textContent='📋 All Escalations';
@@ -1092,7 +1093,7 @@ try{
   const s=JSON.parse(sessionStorage.getItem('esc_session'));
   if(s&&s.id){
     const users=loadUsers(); const user=users.find(u=>u.id===s.id);
-    if(user){ currentUser=user; document.getElementById('loginScreen').style.display='none'; document.getElementById('appWrap').style.display='block'; document.getElementById('uName').textContent=user.name; document.getElementById('uAvatar').textContent=user.name.charAt(0).toUpperCase(); document.getElementById('analyticsTabBtn').style.display = user.role==='admin' ? '' : 'none'; if(user.role==='admin') document.getElementById('mgrBtn').style.display=''; if(user.role==='urbanic'){ document.getElementById('exportWrap').style.display='none'; document.getElementById('mgrBtn').style.display='none'; } else { document.getElementById('exportWrap').style.display=''; } hideAnalytics(); activeTab='all'; document.getElementById('tableTitle').textContent='📋 All Escalations'; document.querySelectorAll('.ship-tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); if(isMobileView){ document.querySelectorAll('.mobile-nav-btn').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); } populateActFilter(); render(); updateStats(); updateTabs(); renderActivity(); }
+    if(user){ currentUser=user; document.getElementById('loginScreen').style.display='none'; document.getElementById('appWrap').style.display='block'; document.getElementById('uName').textContent=user.name; document.getElementById('uAvatar').textContent=user.name.charAt(0).toUpperCase(); document.getElementById('analyticsTabBtn').style.display = user.role==='admin' ? '' : 'none'; if(user.role==='admin') document.getElementById('mgrBtn').style.display=''; if(user.role==='urbanic'){ document.getElementById('exportWrap').style.display='none'; document.getElementById('mgrBtn').style.display='none'; } else { document.getElementById('exportWrap').style.display=''; } resetFilters(); hideAnalytics(); activeTab='all'; document.getElementById('tableTitle').textContent='📋 All Escalations'; document.querySelectorAll('.ship-tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); if(isMobileView){ document.querySelectorAll('.mobile-nav-btn').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); } populateActFilter(); render(); updateStats(); updateTabs(); renderActivity(); }
   }
 }catch(e){}
 
@@ -2059,14 +2060,22 @@ function syncDesktopToMobile(){
   if(fTo && mTo) mTo.value = fTo.value;
 }
 
-function clearFilters(){
-  document.getElementById('fFrom').value = '';
-  document.getElementById('fTo').value = '';
-  // Also clear mobile date inputs if they exist
+function resetFilters(){
+  const from = document.getElementById('fFrom');
+  const to = document.getElementById('fTo');
+  const search = document.getElementById('srchInp');
   const mFrom = document.getElementById('mFrom');
   const mTo = document.getElementById('mTo');
+
+  if(from) from.value = '';
+  if(to) to.value = '';
+  if(search) search.value = '';
   if(mFrom) mFrom.value = '';
   if(mTo) mTo.value = '';
+}
+
+function clearFilters(){
+  resetFilters();
   render();
 }
 function downloadFiltered(){
