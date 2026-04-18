@@ -75,7 +75,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 .btn-logout:hover{border-color:var(--rd);color:var(--rd)}
 
 /* STATS BAR */
-.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--bd);border-bottom:1px solid var(--bd)}
+.stats-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bd);border-bottom:1px solid var(--bd)}
 .stat{background:var(--sf);padding:14px 20px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
 .stat::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:transparent;transition:background .2s}
 .stat:hover{background:var(--sf2)}
@@ -94,7 +94,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 .stat-sub{font-size:10px;color:var(--mt)}
 
 /* MAIN */
-.main{display:flex;min-height:calc(100vh - 150px);height:auto;}
+.main{display:flex;height:calc(100vh - 130px)}
 
 /* SIDEBAR - hidden */
 .sidebar{display:none}
@@ -351,74 +351,8 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
 .an-age-toggle{background:var(--sf2);border:1px solid var(--bd);border-radius:5px;padding:3px 9px;font-family:'DM Mono',monospace;font-size:10px;color:var(--mt);cursor:pointer;font-weight:600;transition:all .2s}
 .an-age-toggle:hover{border-color:var(--ac);color:var(--ac)}
 .an-age-toggle.active{background:var(--ac);border-color:var(--ac);color:#fff}
-
-  @media screen and (max-width: 990px) {
-    header{padding:10px 14px;}
-    .hdr-right{gap:6px;}
-    .stats-bar{grid-template-columns:repeat(2,1fr) !important;}
-    .stat{padding:12px 14px;}
-    .stat-icon{width:40px;height:40px;font-size:18px;}
-    .stat-info{gap:6px;}
-    .sv{font-size:26px;}
-    .table-hdr{padding:10px 12px;}
-    .table-title{font-size:12px;}
-    .srch{width:100%;max-width:100%;}
-    .filter-bar{padding:9px 12px;gap:6px;}
-    .f-date,.f-clear,.f-dl-btn,.f-month{font-size:10px;padding:5px 8px;}
-    .ship-tab{padding:8px 10px;font-size:9px;}
-    .table-scroll{overflow-x:auto;}
-    table{min-width:900px;}
-    th,td{padding:8px 8px;font-size:11px;}
-    .preview-tbl th,.preview-tbl td{padding:4px 6px;}
-    .modal{width:100%;margin:0 10px;}
-    .m-body{padding:14px;}
-    .m-grid,.type-row,.st-row,.detail-box,.vs-grid{grid-template-columns:1fr;}
-  }
-  @media screen and (max-width: 680px) {
-    header{flex-direction:column;align-items:stretch;gap:10px;}
-    .logo{justify-content:center;}
-    .hdr-right{justify-content:center;width:100%;}
-    .stats-bar{grid-template-columns:1fr !important;}
-    .stat{padding:12px 14px;}
-    .stat-icon{width:40px;height:40px;font-size:18px;}
-    .stat-info{gap:6px;}
-    .sv{font-size:24px;}
-    .ship-tabs{gap:4px;}
-    .table-hdr{flex-direction:column;align-items:stretch;}
-    .filter-bar{justify-content:flex-start;}
-    .f-sep{display:none;}
-    .srch{width:100%;}
-    .f-clear,.f-dl-btn{width:100%;}
-    .table-scroll{overflow-x:auto;}
-    table{min-width:680px;}
-    th{font-size:8px;}
-    td{font-size:10px;}
-    .type-opt{font-size:10px;padding:9px 6px;}
-    .m-save{width:100%;}
-    .hdr-btn{flex:1;min-width:0;}
-    .toast{min-width:auto;width:calc(100vw - 20px);right:10px;left:10px;}
-    .an-tat-donut{flex-direction:column;align-items:center;}
-    .an-bar-row{flex-direction:column;align-items:flex-start;}
-    .an-bar-label{width:auto;}
-    .an-client-row{flex-wrap:wrap;}
-    .an-legend{width:100%;}
-    .pay-donut-row{flex-direction:column;align-items:flex-start;gap:10px;}
-    .col-map-row{display:grid;grid-template-columns:1fr;gap:8px;}
-  }
-  @media screen and (max-width: 520px) {
-    body{font-size:14px;}
-    .hdr-btn{padding:6px 10px;font-size:10px;}
-    .table-title{font-size:11px;}
-    .ship-tab{padding:7px 8px;}
-    .filter-bar{padding:8px 10px;}
-    .type-row{gap:6px;}
-    .m-cls{font-size:14px;}
-    .detail-box{grid-template-columns:1fr;}
-    .vs-grid{grid-template-columns:1fr;}
-    .an-bar-count{font-size:9px;}
-  }
-<body>
-
+</style>
+</head>
 <!-- ══ LOGIN SCREEN ══ -->
 <div id="loginScreen">
   <div class="login-box">
@@ -469,7 +403,7 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
 </header>
 
 <!-- STATS BAR -->
-<div class="stats-bar">
+<div class="stats-bar" style="grid-template-columns:repeat(4,1fr)">
   <div class="stat s-total" onclick="filterStat('all',this)">
     <div class="stat-icon ic-total">📋</div>
     <div class="stat-info">
@@ -925,7 +859,6 @@ function doLogin(){
   document.getElementById('appWrap').style.display='block';
   document.getElementById('uName').textContent=user.name;
   document.getElementById('uAvatar').textContent=user.name.charAt(0).toUpperCase();
-  document.getElementById('analyticsTabBtn').style.display = user.role==='admin' ? '' : 'none';
   if(user.role==='admin') document.getElementById('mgrBtn').style.display='';
   if(user.role==='urbanic'){ document.getElementById('exportWrap').style.display='none'; document.getElementById('mgrBtn').style.display='none'; }
   else { document.getElementById('exportWrap').style.display=''; }
@@ -1397,7 +1330,7 @@ let analyticsActive = false;
 
 function showAnalytics(el){
   if(currentUser?.role !== 'admin'){
-    toast('t-err','Access Denied','Analytics is available to admin users only.');
+    toast('t-err','🚫 Access Denied','Analytics is restricted to admin users only.');
     return;
   }
   analyticsActive = true;
