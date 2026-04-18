@@ -1040,6 +1040,11 @@ function doLogin(){
   if(user.role==='admin') document.getElementById('mgrBtn').style.display='';
   if(user.role==='urbanic'){ document.getElementById('exportWrap').style.display='none'; document.getElementById('mgrBtn').style.display='none'; }
   else { document.getElementById('exportWrap').style.display=''; }
+  hideAnalytics();
+  activeTab='all';
+  document.getElementById('tableTitle').textContent='📋 All Escalations';
+  document.querySelectorAll('.ship-tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');});
+  if(isMobileView){ document.querySelectorAll('.mobile-nav-btn').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); }
   populateActFilter();
   render(); updateStats(); updateTabs(); renderActivity();
 }
@@ -1087,7 +1092,7 @@ try{
   const s=JSON.parse(sessionStorage.getItem('esc_session'));
   if(s&&s.id){
     const users=loadUsers(); const user=users.find(u=>u.id===s.id);
-    if(user){ currentUser=user; document.getElementById('loginScreen').style.display='none'; document.getElementById('appWrap').style.display='block'; document.getElementById('uName').textContent=user.name; document.getElementById('uAvatar').textContent=user.name.charAt(0).toUpperCase(); document.getElementById('analyticsTabBtn').style.display = user.role==='admin' ? '' : 'none'; if(user.role==='admin') document.getElementById('mgrBtn').style.display=''; if(user.role==='urbanic'){ document.getElementById('exportWrap').style.display='none'; document.getElementById('mgrBtn').style.display='none'; } else { document.getElementById('exportWrap').style.display=''; } populateActFilter(); render(); updateStats(); updateTabs(); renderActivity(); }
+    if(user){ currentUser=user; document.getElementById('loginScreen').style.display='none'; document.getElementById('appWrap').style.display='block'; document.getElementById('uName').textContent=user.name; document.getElementById('uAvatar').textContent=user.name.charAt(0).toUpperCase(); document.getElementById('analyticsTabBtn').style.display = user.role==='admin' ? '' : 'none'; if(user.role==='admin') document.getElementById('mgrBtn').style.display=''; if(user.role==='urbanic'){ document.getElementById('exportWrap').style.display='none'; document.getElementById('mgrBtn').style.display='none'; } else { document.getElementById('exportWrap').style.display=''; } hideAnalytics(); activeTab='all'; document.getElementById('tableTitle').textContent='📋 All Escalations'; document.querySelectorAll('.ship-tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); if(isMobileView){ document.querySelectorAll('.mobile-nav-btn').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); } populateActFilter(); render(); updateStats(); updateTabs(); renderActivity(); }
   }
 }catch(e){}
 
@@ -1987,27 +1992,73 @@ function importData(input){
 }
 
 function setQuickFilter(period){
-  const today=new Date(); const from=new Date();
-  if(period==='today'){
-    from.setHours(0,0,0,0);
-    document.getElementById('fFrom').value=today.toISOString().split('T')[0];
-    document.getElementById('fTo').value=today.toISOString().split('T')[0];
-  } else if(period==='week'){
-    from.setDate(today.getDate()-today.getDay());
-    from.setHours(0,0,0,0);
-    document.getElementById('fFrom').value=from.toISOString().split('T')[0];
-    document.getElementById('fTo').value=today.toISOString().split('T')[0];
-  } else if(period==='month'){
-    from.setDate(1); from.setHours(0,0,0,0);
-    document.getElementById('fFrom').value=from.toISOString().split('T')[0];
-    document.getElementById('fTo').value=today.toISOString().split('T')[0];
+  const today = new Date();
+  const from = new Date();
+
+  if(period === 'today'){
+    // Get today's date in local timezone (YYYY-MM-DD format)
+    const todayStr = today.getFullYear() + '-' +
+                     String(today.getMonth() + 1).padStart(2, '0') + '-' +
+                     String(today.getDate()).padStart(2, '0');
+    document.getElementById('fFrom').value = todayStr;
+    document.getElementById('fTo').value = todayStr;
+  } else if(period === 'week'){
+    // Last 7 days (including today)
+    from.setDate(today.getDate() - 6); // 6 days ago to include today as 7th day
+    const fromStr = from.getFullYear() + '-' +
+                    String(from.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(from.getDate()).padStart(2, '0');
+    const todayStr = today.getFullYear() + '-' +
+                     String(today.getMonth() + 1).padStart(2, '0') + '-' +
+                     String(today.getDate()).padStart(2, '0');
+    document.getElementById('fFrom').value = fromStr;
+    document.getElementById('fTo').value = todayStr;
+  } else if(period === 'month'){
+    // Last 30 days (including today)
+    from.setDate(today.getDate() - 29); // 29 days ago to include today as 30th day
+    const fromStr = from.getFullYear() + '-' +
+                    String(from.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(from.getDate()).padStart(2, '0');
+    const todayStr = today.getFullYear() + '-' +
+                     String(today.getMonth() + 1).padStart(2, '0') + '-' +
+                     String(today.getDate()).padStart(2, '0');
+    document.getElementById('fFrom').value = fromStr;
+    document.getElementById('fTo').value = todayStr;
   }
+
+  // Sync to mobile date inputs
+  syncDesktopToMobile();
   render();
 }
 function toast(type,title,msg){ const icons={'t-ok':'✅','t-err':'🚨','t-info':'ℹ️','t-bulk':'📤'}; const d=document.createElement('div'); d.className=`toast ${type}`; d.innerHTML=`<div class="ti">${icons[type]||'ℹ️'}</div><div class="tco"><div class="ttl">${title}</div><div class="tmg">${msg}</div></div>`; document.getElementById('tc').appendChild(d); setTimeout(()=>{d.classList.add('fo');setTimeout(()=>d.remove(),300);},3800); }
+function syncMobileDates(){
+  const mFrom = document.getElementById('mFrom');
+  const mTo = document.getElementById('mTo');
+  const fFrom = document.getElementById('fFrom');
+  const fTo = document.getElementById('fTo');
+
+  if(mFrom && fFrom) fFrom.value = mFrom.value;
+  if(mTo && fTo) fTo.value = mTo.value;
+}
+
+function syncDesktopToMobile(){
+  const mFrom = document.getElementById('mFrom');
+  const mTo = document.getElementById('mTo');
+  const fFrom = document.getElementById('fFrom');
+  const fTo = document.getElementById('fTo');
+
+  if(fFrom && mFrom) mFrom.value = fFrom.value;
+  if(fTo && mTo) mTo.value = fTo.value;
+}
+
 function clearFilters(){
-  document.getElementById('fFrom').value='';
-  document.getElementById('fTo').value='';
+  document.getElementById('fFrom').value = '';
+  document.getElementById('fTo').value = '';
+  // Also clear mobile date inputs if they exist
+  const mFrom = document.getElementById('mFrom');
+  const mTo = document.getElementById('mTo');
+  if(mFrom) mFrom.value = '';
+  if(mTo) mTo.value = '';
   render();
 }
 function downloadFiltered(){
@@ -2143,8 +2194,8 @@ function setupMobileUI(){
     <div class="filter-group">
       <div class="filter-label">Date Range</div>
       <div class="filter-row">
-        <input type="date" class="filter-btn" id="mFrom" onchange="render()"/>
-        <input type="date" class="filter-btn" id="mTo" onchange="render()"/>
+        <input type="date" class="filter-btn" id="mFrom" onchange="syncMobileDates(); render()"/>
+        <input type="date" class="filter-btn" id="mTo" onchange="syncMobileDates(); render()"/>
         <button class="filter-btn" onclick="clearFilters()">✕ Clear</button>
       </div>
     </div>
@@ -2204,6 +2255,9 @@ function setupMobileUI(){
   document.querySelector('.ship-tabs').style.display = 'none';
   document.querySelector('.table-hdr').style.display = 'none';
   document.querySelector('.filter-bar').style.display = 'none';
+
+  // Sync dates to mobile inputs
+  syncDesktopToMobile();
 }
 
 function setupTouchGestures(){
