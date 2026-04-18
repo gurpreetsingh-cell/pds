@@ -1,3 +1,2 @@
-# Python dependencies (if any backend is added in the future)
-# Currently this is a static HTML/CSS/JS application
-# No Python requirements needed for current deployment
+# No Python dependencies are required for this static HTML/CSS/JS application.
+# If you add a Python backend later, list its packages here.
