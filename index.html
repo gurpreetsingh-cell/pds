@@ -1088,14 +1088,40 @@ tick(); setInterval(tick,1000);
 // Backdrop close
 ['newMO','upMO','bulkMO','umMO','viewMO'].forEach(id=>document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeMo(id);}));
 
-// Session restore
-try{
-  const s=JSON.parse(sessionStorage.getItem('esc_session'));
-  if(s&&s.id){
-    const users=loadUsers(); const user=users.find(u=>u.id===s.id);
-    if(user){ currentUser=user; document.getElementById('loginScreen').style.display='none'; document.getElementById('appWrap').style.display='block'; document.getElementById('uName').textContent=user.name; document.getElementById('uAvatar').textContent=user.name.charAt(0).toUpperCase(); document.getElementById('analyticsTabBtn').style.display = user.role==='admin' ? '' : 'none'; if(user.role==='admin') document.getElementById('mgrBtn').style.display=''; if(user.role==='urbanic'){ document.getElementById('exportWrap').style.display='none'; document.getElementById('mgrBtn').style.display='none'; } else { document.getElementById('exportWrap').style.display=''; } resetFilters(); hideAnalytics(); activeTab='all'; document.getElementById('tableTitle').textContent='📋 All Escalations'; document.querySelectorAll('.ship-tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); if(isMobileView){ document.querySelectorAll('.mobile-nav-btn').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); } populateActFilter(); render(); updateStats(); updateTabs(); renderActivity(); }
-  }
-}catch(e){}
+function restoreSession(){
+  try{
+    const s=JSON.parse(sessionStorage.getItem('esc_session'));
+    if(s&&s.id){
+      const users=loadUsers(); const user=users.find(u=>u.id===s.id);
+      if(user){
+        currentUser=user;
+        document.getElementById('loginScreen').style.display='none';
+        document.getElementById('appWrap').style.display='block';
+        document.getElementById('uName').textContent=user.name;
+        document.getElementById('uAvatar').textContent=user.name.charAt(0).toUpperCase();
+        document.getElementById('analyticsTabBtn').style.display = user.role==='admin' ? '' : 'none';
+        if(user.role==='admin') document.getElementById('mgrBtn').style.display='';
+        if(user.role==='urbanic'){
+          document.getElementById('exportWrap').style.display='none';
+          document.getElementById('mgrBtn').style.display='none';
+        } else {
+          document.getElementById('exportWrap').style.display='';
+        }
+        resetFilters();
+        hideAnalytics();
+        activeTab='all';
+        document.getElementById('tableTitle').textContent='📋 All Escalations';
+        document.querySelectorAll('.ship-tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');});
+        if(isMobileView){ document.querySelectorAll('.mobile-nav-btn').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); }
+        populateActFilter();
+        render();
+        updateStats();
+        updateTabs();
+        renderActivity();
+      }
+    }
+  }catch(e){}
+}
 
 // ═══════════════ USER MANAGER ═══════════════
 function openModal(id){ document.getElementById(id).classList.add('open'); if(id==='umMO') renderUserList(); }
@@ -2406,14 +2432,18 @@ function editEscalation(id){
 // Override render function for mobile
 const originalRender = window.render;
 window.render = function(){
-  originalRender();
   if(isMobileView){
     renderMobileTable();
+    return;
   }
+  originalRender();
 };
 
 // Initialize mobile on load
-window.addEventListener('load', initMobile);
+window.addEventListener('load', () => {
+  initMobile();
+  restoreSession();
+});
 window.addEventListener('resize', () => {
   if(window.innerWidth <= 768 && !isMobileView){
     isMobileView = true;
