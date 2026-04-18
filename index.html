@@ -1414,8 +1414,16 @@ function getFiltered(){
   // Date range filter
   const from=document.getElementById('fFrom').value;
   const to=document.getElementById('fTo').value;
-  if(from){ const fd=new Date(from); d=d.filter(e=>new Date(e.ts)>=fd); }
-  if(to){ const td=new Date(to); td.setHours(23,59,59,999); d=d.filter(e=>new Date(e.ts)<=td); }
+  if(from){
+    const [fy,fm,fd]=from.split('-').map(Number);
+    const fdDate=new Date(fy,fm-1,fd,0,0,0,0);
+    d=d.filter(e=>new Date(e.ts)>=fdDate);
+  }
+  if(to){
+    const [ty,tm,td]=to.split('-').map(Number);
+    const tdDate=new Date(ty,tm-1,td,23,59,59,999);
+    d=d.filter(e=>new Date(e.ts)<=tdDate);
+  }
   return d;
 }
 
