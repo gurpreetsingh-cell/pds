@@ -1819,27 +1819,29 @@ function downloadFiltered(){
 }
 function downloadSample(){
   const sample=[
-    ['Client Name','AWB No.','Order No. (Optional)','Payment Mode','Escalation Type','Action / Remarks'],
-    ['Asaya','AWB-5001','ORD-1001','Prepaid','Fake Attempt','Customer denied delivery attempt, rescheduling'],
-    ['Urbanic','AWB-5002','ORD-1002','COD','Delay','Package stuck at hub since 3 days, escalated to courier'],
-    ['Bewakoof','AWB-5003','ORD-1003','Prepaid','Reattempt','Customer requested reattempt on next working day'],
-    ['Mango','AWB-5004','','COD','Fake Attempt','Delivery marked without attempt, complaint raised'],
-    ['Zara','AWB-5005','ORD-1005','Prepaid','Other','Wrong product delivered, return initiated'],
-    ['Nykaa','AWB-5006','ORD-1006','COD','Delay','Transit delay due to weather, ETA updated'],
+    ['Client Name','DC Name','Mode of Escalation','AWB No.','Order No. (Optional)','Payment Mode','Escalation Type','Action / Remarks'],
+    ['Asaya','Delhi DC','WhatsApp','AWB-5001','ORD-1001','Prepaid','Fake Attempt','Customer denied delivery attempt, rescheduling'],
+    ['Urbanic','Mumbai DC','Email','AWB-5002','ORD-1002','COD','Delay','Package stuck at hub since 3 days, escalated to courier'],
+    ['Bewakoof','Bangalore DC','Drive','AWB-5003','ORD-1003','Prepaid','Reattempt','Customer requested reattempt on next working day'],
+    ['Mango','Delhi DC','WhatsApp','AWB-5004','','COD','Fake Attempt','Delivery marked without attempt, complaint raised'],
+    ['Zara','Chennai DC','Email','AWB-5005','ORD-1005','Prepaid','Other','Wrong product delivered, return initiated'],
+    ['Nykaa','Hyderabad DC','Drive','AWB-5006','ORD-1006','COD','Delay','Transit delay due to weather, ETA updated'],
   ];
   const ws=XLSX.utils.aoa_to_sheet(sample);
-  ws['!cols']=[{wch:14},{wch:14},{wch:18},{wch:14},{wch:16},{wch:42}];
+  ws['!cols']=[{wch:16},{wch:16},{wch:18},{wch:14},{wch:18},{wch:14},{wch:16},{wch:42}];
   // Style header row
   const hdrStyle={font:{bold:true},fill:{fgColor:{rgb:'F0A500'}},alignment:{horizontal:'center'}};
-  ['A1','B1','C1','D1','E1','F1'].forEach(cell=>{ if(!ws[cell]) return; ws[cell].s=hdrStyle; });
+  ['A1','B1','C1','D1','E1','F1','G1','H1'].forEach(cell=>{ if(!ws[cell]) return; ws[cell].s=hdrStyle; });
   // Add data validation note
-  ws['D2']={v:'Prepaid',t:'s'}; ws['D3']={v:'COD',t:'s'};
+  ws['F2']={v:'Prepaid',t:'s'}; ws['F3']={v:'COD',t:'s'};
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Sample Escalation');
   // Add a notes sheet
   const notesData=[
     ['Field','Required?','Valid Values / Notes'],
     ['Client Name','Yes','Name of the client/brand'],
+    ['DC Name','Yes','Name of the distribution center or warehouse'],
+    ['Mode of Escalation','Yes','WhatsApp, Email or Drive'],
     ['AWB No.','YES - MANDATORY','Unique AWB number. Duplicates will be rejected.'],
     ['Order No.','No (Optional)','Leave blank if not available'],
     ['Payment Mode','Yes','Only: Prepaid or COD'],
