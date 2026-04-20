@@ -20,7 +20,7 @@ def create_admin_user():
 
         # Create admin user
         password_hash = bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        admin = User(username='admin', password_hash=password_hash)
+        admin = User(username='admin', password_hash=password_hash, role='admin')
         db.session.add(admin)
         db.session.commit()
 
