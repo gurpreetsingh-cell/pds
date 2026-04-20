@@ -1513,7 +1513,7 @@ async function submitNew(){
 
 // ═══════════════ VIEW MODAL ═══════════════
 function openViewModal(id){
-  const e=data.find(x=>x.id===id); if(!e) return;
+  const e=data.find(x=>x.id===parseInt(id)||x.id===id); if(!e) return;
   const tat=getTAT(e);
   document.getElementById('viewBody').innerHTML=`
     <div class="tat-info-bar">
@@ -1548,7 +1548,7 @@ function openViewModal(id){
 
 // ═══════════════ UPDATE MODAL ═══════════════
 function openUpdateModal(id){
-  const e=data.find(x=>x.id===id); if(!e) return;
+  const e=data.find(x=>x.id===parseInt(id)||x.id===id); if(!e) return;
   selId=id; mStatus=e.status;
   document.getElementById('moInfo').innerHTML=`
     <div class="di-item"><div class="di-lbl">Escalation ID</div><div class="di-val" style="color:var(--ac)">${e.id}</div></div>
@@ -1574,10 +1574,10 @@ async function saveUpdate(){
   const remarks=document.getElementById('uRemarks').value.trim();
   const currentStatus=document.getElementById('uCurrentStatus').value.trim();
   if(!remarks){document.getElementById('uRemarks').classList.add('err');toast('t-err','⚠️ Remarks Required','Action/Remarks cannot be empty.');return;}
-  const e=data.find(x=>x.id==selId); if(!e) return;
+  const e=data.find(x=>x.id===parseInt(selId)||x.id===selId); if(!e) return;
   const wasOpen=e.status==='open';
   try {
-    await updateEscalation(selId, {
+    await updateEscalation(parseInt(selId), {
       client: document.getElementById('uClient').value.trim(),
       order: document.getElementById('uOrder').value.trim(),
       awb: document.getElementById('uAwb').value.trim(),
@@ -1599,7 +1599,7 @@ async function delEntry(id,ev){
   ev.stopPropagation();
   if(!confirm('Delete this escalation? This cannot be undone.')) return;
   try {
-    await deleteEscalation(id);
+    await deleteEscalation(parseInt(id));
     render(); updateStats(); updateTabs();
     toast('t-info','🗑️ Deleted','Escalation removed.');
   } catch (error) {
