@@ -278,7 +278,7 @@ def internal_error(error):
 def index():
     """Serve main HTML file"""
     try:
-        return send_from_directory('.', 'index.html'), 200
+        return send_from_directory('.', 'index.html')
     except Exception as e:
         return jsonify({'error': 'Cannot serve index.html'}), 500
 
