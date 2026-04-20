@@ -20,13 +20,6 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
 db = SQLAlchemy(app)
 
-# Helper function to extract token from Authorization header
-def get_token_from_request():
-    auth_header = request.headers.get('Authorization', '')
-    if auth_header.startswith('Bearer '):
-        return auth_header[7:]  # Remove 'Bearer ' prefix
-    return auth_header if auth_header else None
-
 # Models
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -47,75 +40,81 @@ class Escalation(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-# Routes - API routes FIRST
-@app.route('/health', methods=['GET'])
+def get_token_from_request():
+    """Extract JWT token from Authorization header"""
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        return auth_header[7:]
+    return None
+
+# ============ API ROUTES ============
+
+@app.route('/api/health', methods=['GET'])
 def health():
+    """Health check endpoint"""
     try:
         db.session.execute(text('SELECT 1'))
-        return jsonify({'status': 'ok', 'database': 'connected'})
+        return jsonify({'status': 'ok', 'database': 'connected'}), 200
     except Exception as e:
         return jsonify({'status': 'error', 'database': 'disconnected', 'error': str(e)}), 500
 
-@app.route('/api/test', methods=['GET'])
-def test():
-    return jsonify({'status': 'ok', 'message': 'API is working'})
-
 @app.route('/api/login', methods=['POST'])
 def login():
-    print("[DEBUG] Login endpoint called")
+    """User login endpoint"""
     try:
-        data = request.get_json()
-        print(f"[DEBUG] Request data: {data}")
-        if not data:
-            return jsonify({'error': 'No JSON data provided'}), 400
-        
+        data = request.get_json(force=True)
         username = data.get('username', '').strip()
         password = data.get('password', '')
-        print(f"[DEBUG] Login attempt for user: {username}")
         
         if not username or not password:
             return jsonify({'error': 'Username and password required'}), 400
 
         user = User.query.filter_by(username=username).first()
-        print(f"[DEBUG] User found: {user is not None}")
-        
         if user and bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
-            print("[DEBUG] Password correct, generating token")
             token = jwt.encode({
                 'user_id': user.id,
                 'exp': datetime.utcnow() + timedelta(days=7)
             }, app.config['SECRET_KEY'], algorithm='HS256')
-            # Ensure token is string type
+            
             if isinstance(token, bytes):
                 token = token.decode('utf-8')
-            print(f"[DEBUG] Token generated: {token[:20]}...")
-            return jsonify({'token': str(token), 'user': {'id': user.id, 'username': user.username}})
-        print("[DEBUG] Login failed - invalid credentials")
+            
+            return jsonify({
+                'token': str(token),
+                'user': {'id': user.id, 'username': user.username}
+            }), 200
+        
         return jsonify({'error': 'Invalid credentials'}), 401
     except Exception as e:
-        print(f"[DEBUG] Login error: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/register', methods=['POST'])
 def register():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
+    """User registration endpoint"""
+    try:
+        data = request.get_json(force=True)
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
 
-    if User.query.filter_by(username=username).first():
-        return jsonify({'error': 'Username already exists'}), 400
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
 
-    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    user = User(username=username, password_hash=password_hash)
-    db.session.add(user)
-    db.session.commit()
+        if User.query.filter_by(username=username).first():
+            return jsonify({'error': 'Username already exists'}), 400
 
-    return jsonify({'message': 'User created successfully'})
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        user = User(username=username, password_hash=password_hash)
+        db.session.add(user)
+        db.session.commit()
+
+        return jsonify({'message': 'User created successfully'}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/escalations', methods=['GET'])
 def get_escalations():
+    """Get all escalations for authenticated user"""
     token = get_token_from_request()
     if not token:
         return jsonify({'error': 'No token provided'}), 401
@@ -126,22 +125,26 @@ def get_escalations():
     except:
         return jsonify({'error': 'Invalid token'}), 401
 
-    escalations = Escalation.query.filter_by(user_id=user_id).all()
-    return jsonify([{
-        'id': e.id,
-        'tracking_id': e.tracking_id,
-        'customer_name': e.customer_name,
-        'phone': e.phone,
-        'email': e.email,
-        'issue_type': e.issue_type,
-        'description': e.description,
-        'status': e.status,
-        'created_at': e.created_at.isoformat(),
-        'updated_at': e.updated_at.isoformat()
-    } for e in escalations])
+    try:
+        escalations = Escalation.query.filter_by(user_id=user_id).all()
+        return jsonify([{
+            'id': e.id,
+            'tracking_id': e.tracking_id,
+            'customer_name': e.customer_name,
+            'phone': e.phone,
+            'email': e.email,
+            'issue_type': e.issue_type,
+            'description': e.description,
+            'status': e.status,
+            'created_at': e.created_at.isoformat(),
+            'updated_at': e.updated_at.isoformat()
+        } for e in escalations]), 200
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/escalations', methods=['POST'])
 def create_escalation():
+    """Create new escalation"""
     token = get_token_from_request()
     if not token:
         return jsonify({'error': 'No token provided'}), 401
@@ -153,10 +156,7 @@ def create_escalation():
         return jsonify({'error': 'Invalid token'}), 401
 
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No JSON data provided'}), 400
-        
+        data = request.get_json(force=True)
         escalation = Escalation(
             tracking_id=data.get('tracking_id', ''),
             customer_name=data.get('customer_name', ''),
@@ -180,12 +180,14 @@ def create_escalation():
             'status': escalation.status,
             'created_at': escalation.created_at.isoformat(),
             'updated_at': escalation.updated_at.isoformat()
-        })
+        }), 201
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/escalations/<int:id>', methods=['PUT'])
 def update_escalation(id):
+    """Update escalation"""
     token = get_token_from_request()
     if not token:
         return jsonify({'error': 'No token provided'}), 401
@@ -201,10 +203,7 @@ def update_escalation(id):
         return jsonify({'error': 'Escalation not found'}), 404
 
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No JSON data provided'}), 400
-        
+        data = request.get_json(force=True)
         escalation.tracking_id = data.get('tracking_id', escalation.tracking_id)
         escalation.customer_name = data.get('customer_name', escalation.customer_name)
         escalation.phone = data.get('phone', escalation.phone)
@@ -225,12 +224,14 @@ def update_escalation(id):
             'status': escalation.status,
             'created_at': escalation.created_at.isoformat(),
             'updated_at': escalation.updated_at.isoformat()
-        })
+        }), 200
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/escalations/<int:id>', methods=['DELETE'])
 def delete_escalation(id):
+    """Delete escalation"""
     token = get_token_from_request()
     if not token:
         return jsonify({'error': 'No token provided'}), 401
@@ -248,48 +249,40 @@ def delete_escalation(id):
     try:
         db.session.delete(escalation)
         db.session.commit()
-        return jsonify({'message': 'Escalation deleted'})
+        return jsonify({'message': 'Escalation deleted'}), 200
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
-# Global Error Handlers
+# ============ ERROR HANDLERS ============
+
 @app.errorhandler(404)
 def not_found(error):
+    """Handle 404 errors"""
     return jsonify({'error': 'Endpoint not found'}), 404
 
 @app.errorhandler(405)
 def method_not_allowed(error):
+    """Handle 405 errors"""
     return jsonify({'error': 'Method not allowed'}), 405
 
 @app.errorhandler(500)
 def internal_error(error):
+    """Handle 500 errors"""
     db.session.rollback()
     return jsonify({'error': 'Internal server error'}), 500
 
-# Static file handlers - MUST come after API routes
+# ============ STATIC FILE SERVING ============
+
 @app.route('/')
 def index():
+    """Serve main HTML file"""
     try:
-        return send_from_directory('.', 'index.html')
+        return send_from_directory('.', 'index.html'), 200
     except Exception as e:
-        return jsonify({'error': 'Cannot serve index.html', 'detail': str(e)}), 500
+        return jsonify({'error': 'Cannot serve index.html'}), 500
 
-# Catch-all for static files - but exclude API routes
-@app.route('/<path:path>')
-def static_or_spa(path):
-    print(f"[DEBUG] Catch-all route called for path: {path}")
-    
-    # Explicitly block API routes - they should be handled above
-    if path.startswith('api/'):
-        print(f"[DEBUG] Blocking API route: {path}")
-        return jsonify({'error': 'API endpoint not found'}), 404
-    
-    try:
-        return send_from_directory('.', path)
-    except Exception as e:
-        print(f"[DEBUG] File not found: {path}, error: {e}")
-        # If file doesn't exist, serve index.html (for SPA routing)
-        return send_from_directory('.', 'index.html')
+# ============ INITIALIZATION ============
 
 if __name__ == '__main__':
     with app.app_context():
@@ -304,7 +297,7 @@ if __name__ == '__main__':
                     admin = User(username='admin', password_hash=password_hash)
                     db.session.add(admin)
                     db.session.commit()
-                    print("✅ Admin user created")
+                    print("✅ Admin user created (admin/admin123)")
                 else:
                     print("✅ Admin user already exists")
             except Exception as e:
@@ -314,5 +307,6 @@ if __name__ == '__main__':
             print(f"❌ Database error: {e}")
     
     port = int(os.getenv('PORT', 5000))
-    print(f"🚀 Starting server on 0.0.0.0:{port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    debug_mode = os.getenv('FLASK_ENV') == 'development'
+    print(f"🚀 Starting server on 0.0.0.0:{port} (debug={debug_mode})")
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
