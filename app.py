@@ -46,7 +46,7 @@ class Escalation(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-# Routes
+# Routes - API routes FIRST
 @app.route('/health', methods=['GET'])
 def health():
     try:
@@ -54,14 +54,6 @@ def health():
         return jsonify({'status': 'ok', 'database': 'connected'})
     except:
         return jsonify({'status': 'error', 'database': 'disconnected'}), 500
-
-@app.route('/')
-def index():
-    return send_from_directory('.', 'index.html')
-
-@app.route('/<path:path>')
-def static_files(path):
-    return send_from_directory('.', path)
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -257,6 +249,24 @@ def method_not_allowed(error):
 def internal_error(error):
     db.session.rollback()
     return jsonify({'error': 'Internal server error'}), 500
+
+# Static file handlers - MUST come after API routes
+@app.route('/')
+def index():
+    return send_from_directory('.', 'index.html')
+
+# Catch-all for static files - but exclude API routes
+@app.route('/<path:path>')
+def static_or_spa(path):
+    # Explicitly block API routes - they should be handled above
+    if path.startswith('api/'):
+        return jsonify({'error': 'API endpoint not found'}), 404
+    
+    try:
+        return send_from_directory('.', path)
+    except:
+        # If file doesn't exist, serve index.html (for SPA routing)
+        return send_from_directory('.', 'index.html')
 
 if __name__ == '__main__':
     with app.app_context():
