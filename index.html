@@ -1130,27 +1130,32 @@ async function loadEscalations() {
     if (response.ok) {
       try {
         data = await response.json();
-        // Convert API format to local format
-        data = data.map(e => ({
-          id: e.id,
-          ts: new Date(e.created_at).getTime(),
-          date: new Date(e.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-          time: new Date(e.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
-          client: e.customer_name,
-          dcName: '', // Not in API
-          courier: '', // Not in API
-          order: e.tracking_id,
-          awb: e.tracking_id,
-          payment: '', // Not in API
-          modeOfEsc: '', // Not in API
-          type: e.issue_type,
-          remarks: e.description,
-          status: e.status,
-          addedBy: 'API User', // Not in API
-          addedByUser: '', // Not in API
-          currentStatus: '', // Not in API
-          updatedAt: new Date(e.updated_at).getTime()
-        }));
+        // Convert API format to local format with correct IST timezone
+        data = data.map(e => {
+          const createdDate = new Date(e.created_at);
+          const istTime = new Date(createdDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          return {
+            id: e.id,
+            ts: istTime.getTime(),
+            date: istTime.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+            time: istTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+            client: e.customer_name,
+            dcName: '', // Not in API
+            courier: '', // Not in API
+            order: e.tracking_id,
+            awb: e.tracking_id,
+            payment: '', // Not in API
+            modeOfEsc: '', // Not in API
+            type: e.issue_type,
+            remarks: e.description,
+            status: e.status,
+            addedBy: currentUser.username || 'API User',
+            addedByUser: currentUser.username || '', // Use actual logged-in username
+            currentStatus: '', // Not in API
+            updatedAt: istTime.getTime(),
+            userId: e.user_id
+          };
+        });
       } catch (e) {
         console.error('JSON parse error:', e);
         data = [];
@@ -1171,6 +1176,12 @@ async function loadEscalations() {
 }
 
 async function createEscalation(escalation) {
+  // Check for duplicate AWB
+  const duplicateAwb = data.find(e => e.awb === escalation.awb);
+  if (duplicateAwb) {
+    throw new Error('🚫 Duplicate Entry: This AWB has already been escalated. Please avoid re-submission.');
+  }
+  
   const response = await apiCall('/api/escalations', {
     method: 'POST',
     body: {
@@ -1193,6 +1204,12 @@ async function createEscalation(escalation) {
 }
 
 async function updateEscalation(id, updates) {
+  // Check for duplicate AWB (excluding current escalation)
+  const duplicateAwb = data.find(e => e.id !== id && e.awb === updates.awb);
+  if (duplicateAwb) {
+    throw new Error('🚫 Duplicate Entry: This AWB is already being used. Please use a different AWB.');
+  }
+  
   const response = await apiCall(`/api/escalations/${id}`, {
     method: 'PUT',
     body: {
@@ -1245,6 +1262,12 @@ const TAT_HOURS = 72;
 async function doLogin(){
   const username=document.getElementById('lUser').value.trim();
   const password=document.getElementById('lPass').value;
+  
+  // Clear previous error states
+  document.getElementById('lErr').style.display='none';
+  document.getElementById('lUser').classList.remove('err');
+  document.getElementById('lPass').classList.remove('err');
+  
   try {
     const result = await apiLogin(username, password);
     currentUser = { id: result.user.id, username: result.user.username, name: username, role: result.user.role || (username==='admin' ? 'admin' : 'user') };

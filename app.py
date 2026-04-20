@@ -5,8 +5,9 @@ from sqlalchemy import text
 import bcrypt
 import jwt
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+import pytz
 
 load_dotenv()
 
@@ -57,7 +58,7 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='user')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Escalation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -68,8 +69,8 @@ class Escalation(db.Model):
     issue_type = db.Column(db.String(50), nullable=False)
     description = db.Column(db.Text)
     status = db.Column(db.String(20), default='open')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 def get_token_from_request():
@@ -250,7 +251,7 @@ def update_escalation(id):
     except:
         return jsonify({'error': 'Invalid token'}), 401
 
-    escalation = Escalation.query.filter_by(id=id, user_id=user_id).first()
+    escalation = Escalation.query.filter_by(id=id).first()
     if not escalation:
         return jsonify({'error': 'Escalation not found'}), 404
 
@@ -294,7 +295,7 @@ def delete_escalation(id):
     except:
         return jsonify({'error': 'Invalid token'}), 401
 
-    escalation = Escalation.query.filter_by(id=id, user_id=user_id).first()
+    escalation = Escalation.query.filter_by(id=id).first()
     if not escalation:
         return jsonify({'error': 'Escalation not found'}), 404
 
