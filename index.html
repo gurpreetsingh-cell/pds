@@ -1008,13 +1008,20 @@ async function apiLogin(username, password) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    const data = await response.json();
+    
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      throw new Error(`Server error (${response.status}): Invalid response`);
+    }
+    
     if (response.ok) {
       authToken = data.token;
       localStorage.setItem('authToken', authToken);
       return data;
     } else {
-      throw new Error(data.error || 'Login failed');
+      throw new Error(data.error || `Login failed (${response.status})`);
     }
   } catch (error) {
     throw error;
@@ -1028,8 +1035,15 @@ async function apiRegister(username, password) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Registration failed');
+    
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      throw new Error(`Server error (${response.status}): Invalid response`);
+    }
+    
+    if (!response.ok) throw new Error(data.error || `Registration failed (${response.status})`);
     return data;
   } catch (error) {
     throw error;
@@ -1046,7 +1060,7 @@ function logout() {
 // ═══════════════ API CALLS ═══════════════
 async function apiCall(endpoint, options = {}) {
   const headers = { ...options.headers };
-  if (authToken) headers['Authorization'] = authToken;
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   if (options.body && typeof options.body === 'object') {
     headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(options.body);
@@ -1066,31 +1080,47 @@ async function apiCall(endpoint, options = {}) {
 }
 
 async function loadEscalations() {
-  const response = await apiCall('/api/escalations');
-  if (response.ok) {
-    data = await response.json();
-    // Convert API format to local format
-    data = data.map(e => ({
-      id: e.id,
-      ts: new Date(e.created_at).getTime(),
-      date: new Date(e.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-      time: new Date(e.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
-      client: e.customer_name,
-      dcName: '', // Not in API
-      courier: '', // Not in API
-      order: e.tracking_id,
-      awb: e.tracking_id,
-      payment: '', // Not in API
-      modeOfEsc: '', // Not in API
-      type: e.issue_type,
-      remarks: e.description,
-      status: e.status,
-      addedBy: 'API User', // Not in API
-      addedByUser: '', // Not in API
-      currentStatus: '', // Not in API
-      updatedAt: new Date(e.updated_at).getTime()
-    }));
-  } else {
+  try {
+    const response = await apiCall('/api/escalations');
+    if (response.ok) {
+      try {
+        data = await response.json();
+        // Convert API format to local format
+        data = data.map(e => ({
+          id: e.id,
+          ts: new Date(e.created_at).getTime(),
+          date: new Date(e.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+          time: new Date(e.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          client: e.customer_name,
+          dcName: '', // Not in API
+          courier: '', // Not in API
+          order: e.tracking_id,
+          awb: e.tracking_id,
+          payment: '', // Not in API
+          modeOfEsc: '', // Not in API
+          type: e.issue_type,
+          remarks: e.description,
+          status: e.status,
+          addedBy: 'API User', // Not in API
+          addedByUser: '', // Not in API
+          currentStatus: '', // Not in API
+          updatedAt: new Date(e.updated_at).getTime()
+        }));
+      } catch (e) {
+        console.error('JSON parse error:', e);
+        data = [];
+      }
+    } else {
+      try {
+        const error = await response.json();
+        console.error('API error:', error);
+      } catch (e) {
+        console.error('Failed to get error details');
+      }
+      data = [];
+    }
+  } catch (e) {
+    console.error('Error loading escalations:', e);
     data = [];
   }
 }
