@@ -642,7 +642,7 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
       <button class="ship-tab" onclick="setTab('tab_open',this)">🔴 Open <span class="tab-count" id="tc_tab_open">0</span></button>
       <button class="ship-tab" onclick="setTab('tab_close',this)">✅ Closed <span class="tab-count" id="tc_tab_close">0</span></button>
       <button class="ship-tab" onclick="setTab('tab_breach',this)">⚠️ TAT Breach <span class="tab-count" id="tc_tab_breach">0</span></button>
-      <button class="ship-tab" id="analyticsTabBtn" onclick="showAnalytics(this)" style="margin-left:auto;background:rgba(124,58,237,.06);border-left:1px solid var(--bd)">📊 Analytics</button>
+      <button class="ship-tab" id="analyticsTabBtn" onclick="showAnalytics(this)" style="margin-left:auto;background:rgba(124,58,237,.06);border-left:1px solid var(--bd);display:none;">📊 Analytics</button>
     </div>
     <!-- Month-wise tabs row -->
     <div id="monthTabsRow" style="display:flex;align-items:center;background:var(--sf);border-bottom:1px solid var(--bd);overflow-x:auto;flex-shrink:0;min-height:34px">
@@ -999,6 +999,31 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
 // ═══════════════ API CONFIG ═══════════════
 const API_BASE = window.location.origin;
 let authToken = null;
+let currentUser = { id: null, username: '', name: 'User', role: 'user' };
+
+function updateAccessUI() {
+  const analyticsBtn = document.getElementById('analyticsTabBtn');
+  const mobileAnalyticsBtn = document.getElementById('mobileAnalyticsBtn');
+  const mgrBtn = document.getElementById('mgrBtn');
+  const uName = document.getElementById('uName');
+  const isAdmin = currentUser?.role === 'admin';
+
+  if (analyticsBtn) analyticsBtn.style.display = isAdmin ? '' : 'none';
+  if (mobileAnalyticsBtn) mobileAnalyticsBtn.style.display = isAdmin ? '' : 'none';
+  if (mgrBtn) mgrBtn.style.display = isAdmin ? '' : 'none';
+  if (uName) uName.innerHTML = `${currentUser.name || 'User'}${isAdmin ? ' <span class="admin-badge">Admin</span>' : ''}`;
+}
+
+function parseJwt(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    return null;
+  }
+}
 
 // ═══════════════ AUTHENTICATION ═══════════════
 async function apiLogin(username, password) {
@@ -1050,8 +1075,28 @@ async function apiRegister(username, password) {
   }
 }
 
+function loadUsers() {
+  try {
+    const users = localStorage.getItem('users');
+    return users ? JSON.parse(users) : [];
+  } catch (error) {
+    console.error('Failed to load users:', error);
+    return [];
+  }
+}
+
+function saveUsers(users) {
+  try {
+    localStorage.setItem('users', JSON.stringify(users));
+  } catch (error) {
+    console.error('Failed to save users:', error);
+  }
+}
+
 function logout() {
   authToken = null;
+  currentUser = { id: null, username: '', name: 'User', role: 'user' };
+  updateAccessUI();
   localStorage.removeItem('authToken');
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('appWrap').style.display = 'none';
@@ -1202,11 +1247,11 @@ async function doLogin(){
   const password=document.getElementById('lPass').value;
   try {
     const result = await apiLogin(username, password);
-    currentUser = { id: result.user.id, username: result.user.username, name: username };
+    currentUser = { id: result.user.id, username: result.user.username, name: username, role: result.user.role || (username==='admin' ? 'admin' : 'user') };
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appWrap').style.display='block';
-    document.getElementById('uName').textContent=username;
     document.getElementById('uAvatar').textContent=username.charAt(0).toUpperCase();
+    updateAccessUI();
     resetFilters();
     hideAnalytics();
     activeTab='all';
@@ -1255,12 +1300,18 @@ async function restoreSession(){
   const token = localStorage.getItem('authToken');
   if (token) {
     authToken = token;
+    const payload = parseJwt(token);
+    if (payload) {
+      currentUser = { id: payload.user_id || null, username: payload.username || '', name: payload.username || 'User', role: payload.role || 'user' };
+    } else {
+      currentUser = { id: null, username: '', name: 'User', role: 'user' };
+    }
+    updateAccessUI();
     try {
       await loadEscalations();
       document.getElementById('loginScreen').style.display='none';
       document.getElementById('appWrap').style.display='block';
-      document.getElementById('uName').textContent='User';
-      document.getElementById('uAvatar').textContent='U';
+      document.getElementById('uAvatar').textContent=(currentUser.username || 'User').charAt(0).toUpperCase();
       resetFilters();
       hideAnalytics();
       activeTab='all';
@@ -1275,16 +1326,26 @@ async function restoreSession(){
 
 // ═══════════════ USER MANAGER ═══════════════
 function openModal(id){ document.getElementById(id).classList.add('open'); if(id==='umMO') renderUserList(); }
-function createUser(){
+async function createUser(){
   const name=document.getElementById('umName').value.trim();
   const username=document.getElementById('umUser').value.trim();
   const password=document.getElementById('umPass').value.trim();
   const role=document.getElementById('umRole').value;
   if(!name||!username||!password){toast('t-err','⚠️ Missing Fields','Fill all user fields.');return;}
+
   const users=loadUsers();
   if(users.find(u=>u.username===username)){toast('t-err','❌ Duplicate','Username already exists.');return;}
+
+  try {
+    await apiRegister(username, password);
+  } catch (error) {
+    toast('t-err','❌ Registration Failed', error.message || 'Could not create user.');
+    return;
+  }
+
   users.push({id:'u'+Date.now(),name,username,password,role});
   saveUsers(users);
+
   ['umName','umUser','umPass'].forEach(id=>document.getElementById(id).value='');
   renderUserList(); populateActFilter();
   toast('t-ok','✅ User Created',`${name} (${username}) added!`);
@@ -1576,7 +1637,64 @@ function buildMapUI(gridId,prefix,headers){
   FIELDS.forEach(f=>{ const autoIdx=headers.findIndex(h=>AUTO_MAP[f]?.includes(h.toLowerCase().trim())); const row=document.createElement('div'); row.className='col-map-row'; row.innerHTML=`<div class="col-field">${FLABELS[f]}</div><div style="text-align:center;color:var(--mt);font-size:12px">→</div><select class="col-sel" id="${prefix}_${f}">${opts}</select>`; grid.appendChild(row); if(autoIdx>=0) document.getElementById(`${prefix}_${f}`).value=autoIdx; });
 }
 function buildPreview(headers,rows){ const t=document.getElementById('previewTbl'); t.innerHTML=`<thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`; }
-function confirmImport(){ const maps={}; FIELDS.forEach(f=>{const v=document.getElementById(`excel_${f}`)?.value; maps[f]=v!==''&&v!==undefined?parseInt(v):-1;}); const count=doImport(excelRows,maps); save(); closeMo('bulkMO'); logAct('n-bulk',`📤 Bulk Import`,`${count} escalations imported`); nCount++; document.getElementById('nc').textContent=nCount; toast('t-bulk','📤 Import Complete',`${count} escalations added!`); render(); updateStats(); updateTabs(); }
+async function confirmImport(){ 
+  const maps={}; 
+  FIELDS.forEach(f=>{const v=document.getElementById(`excel_${f}`)?.value; maps[f]=v!==''&&v!==undefined?parseInt(v):-1;}); 
+  
+  // Extract escalations from rows
+  let escalations = [];
+  excelRows.forEach((r,i)=>{ 
+    const get=f=>maps[f]>=0?String(r[maps[f]]??'').trim():''; 
+    const client=get('client'); 
+    const order=get('order'); 
+    if(!client&&!order) return; 
+    const rawType=get('type').toLowerCase(); 
+    let type='Delay Delivery'; 
+    if(rawType.includes('damage')) type='Damaged Delivery'; 
+    else if(rawType.includes('empty')) type='Empty Packet'; 
+    else if(rawType.includes('extra')) type='Extra Charge'; 
+    else if(rawType.includes('fake')) type='Fake Delivery'; 
+    else if(rawType.includes('missing')) type='Missing Article'; 
+    else if(rawType.includes('wrong')) type='Wrong Product Delivered'; 
+    else if(rawType.includes('swap')) type='Order Swapped'; 
+    else if(rawType.includes('handover')||rawType.includes('not connected')) type='Shipment Handover but Not Connected'; 
+    else if(rawType.includes('rto')) type='Order delivered but marked RTO'; 
+    else if(rawType&&!rawType.includes('delay')) type='Other'; 
+    
+    escalations.push({
+      tracking_id: get('awb') || get('order') || `ROW-${i+1}`,
+      customer_name: client || 'Unknown',
+      phone: '',
+      email: '',
+      issue_type: type,
+      description: get('remarks') || 'Imported via Bulk Upload'
+    });
+  });
+  
+  // Post each escalation to backend
+  let count = 0;
+  for(const esc of escalations) {
+    try {
+      const response = await apiCall('/api/escalations', {
+        method: 'POST',
+        body: esc
+      });
+      if (response.ok) {
+        count++;
+      }
+    } catch(error) {
+      console.error('Failed to import escalation:', error);
+    }
+  }
+  
+  closeMo('bulkMO');
+  await loadEscalations();
+  logAct('n-bulk',`📤 Bulk Import`,`${count} escalations imported`);
+  nCount++;
+  document.getElementById('nc').textContent=nCount;
+  toast('t-bulk','📤 Import Complete',`${count} escalations added!`);
+  render(); updateStats(); updateTabs();
+}
 function doImport(rows,maps){ let count=0; const ts=Date.now(); rows.forEach((r,i)=>{ const get=f=>maps[f]>=0?String(r[maps[f]]??'').trim():''; const client=get('client'); const order=get('order'); if(!client&&!order) return; const rawType=get('type').toLowerCase(); let type='Delay Delivery'; if(rawType.includes('damage')) type='Damaged Delivery'; else if(rawType.includes('empty')) type='Empty Packet'; else if(rawType.includes('extra')) type='Extra Charge'; else if(rawType.includes('fake')) type='Fake Delivery'; else if(rawType.includes('missing')) type='Missing Article'; else if(rawType.includes('wrong')) type='Wrong Product Delivered'; else if(rawType.includes('swap')) type='Order Swapped'; else if(rawType.includes('handover')||rawType.includes('not connected')) type='Shipment Handover but Not Connected'; else if(rawType.includes('rto')) type='Order delivered but marked RTO'; else if(rawType&&!rawType.includes('delay')) type='Other'; const ets=ts+i; data.unshift({id:genId(),ts:ets,date:fmtDate(ets),time:fmtTime(ets),client:client||'Unknown',dcName:get('dcName')||'Unknown',courier:get('courier'),order:order||`ROW-${i+1}`,awb:get('awb'),payment:get('payment')||'Prepaid',modeOfEsc:get('modeOfEsc')||get('courier')||'Unknown',type,remarks:get('remarks')||'Imported via Bulk Upload',status:'open',addedBy:currentUser?.name||'Bulk Import',addedByUser:currentUser?.username||''}); count++; }); return count; }
 
 // ═══════════════ RENDER ═══════════════
@@ -2426,7 +2544,7 @@ function setupMobileUI(){
       <div class="nav-icon">✅</div>
       <div>Closed</div>
     </button>
-    <button class="mobile-nav-btn" onclick="showAnalytics(this)" id="mobileAnalyticsBtn">
+    <button class="mobile-nav-btn" onclick="showAnalytics(this)" id="mobileAnalyticsBtn" style="display:none;">
       <div class="nav-icon">📊</div>
       <div>Analytics</div>
     </button>
