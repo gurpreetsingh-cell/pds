@@ -5,7 +5,5 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
-      - key: DATABASE_URL
-        value: mysql+pymysql://your_mysql_username:your_mysql_password@your_mysql_host:3306/your_database_name
       - key: SECRET_KEY
-        value: 6h3V7k9pQ4xZ8tF1sL2mN0bW5cR7yA6uyour-super-secret-key-change-this-in-production
+        value: CHANGE_THIS_TO_A_SECURE_RANDOM_STRING_IN_PRODUCTION

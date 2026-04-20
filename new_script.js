@@ -49,7 +49,7 @@ function logout() {
 // ═══════════════ API CALLS ═══════════════
 async function apiCall(endpoint, options = {}) {
   const headers = { ...options.headers };
-  if (authToken) headers['Authorization'] = authToken;
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   if (options.body && typeof options.body === 'object') {
     headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(options.body);

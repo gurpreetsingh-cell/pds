@@ -1,6 +1,6 @@
 # PDS Escalation Hub
 
-A web-based dashboard for managing and tracking product delivery escalations with MySQL database and cross-device synchronization.
+A web-based dashboard for managing and tracking product delivery escalations with PostgreSQL database and cross-device synchronization.
 
 ## Features
 
@@ -98,23 +98,23 @@ git status
 
 ### 1. Database Setup
 
-The app uses **SQLite** for local development (file-based database stored in your project folder). For production, you can easily switch to MySQL.
+The app uses **SQLite** for local development (file-based database stored in your project folder). For production, you can easily switch to PostgreSQL.
 
 #### Local Development (SQLite - No Setup Required!)
 - Database file: `escalation.db` (created automatically)
 - No external services needed
 - Data persists locally and can be committed to Git
 
-#### Production Deployment (Optional - MySQL)
-Choose one of these MySQL hosting options:
+#### Production Deployment (Optional - PostgreSQL)
+Choose one of these PostgreSQL hosting options:
 
 ##### Option A: FreeDB (No Signup!)
 1. Go to [FreeDB](https://freedb.tech)
-2. Click "Create Database" → Choose MySQL → Get credentials instantly
+2. Click "Create Database" → Choose PostgreSQL → Get credentials instantly
 
 ##### Option B: Railway
 1. Go to [Railway](https://railway.app) and sign up
-2. Create project → Add MySQL database → Get connection string
+2. Create project → Add PostgreSQL database → Get connection string
 
 ##### Option C: PlanetScale
 1. Go to [PlanetScale](https://planetscale.com) and create account
@@ -164,12 +164,12 @@ This project is configured for deployment on Render as a web service.
 
 ## Data Storage
 
-The application uses MySQL database for persistent data storage with cross-device synchronization. User authentication is handled via JWT tokens.
+The application uses PostgreSQL database for persistent data storage with cross-device synchronization. User authentication is handled via JWT tokens.
 
 ## Technologies Used
 
-- **Backend:** Flask, SQLAlchemy, PyMySQL, JWT, bcrypt
+- **Backend:** Flask, SQLAlchemy, psycopg2-binary, JWT, bcrypt
 - **Frontend:** HTML5, CSS3, JavaScript (ES6+)
-- **Database:** MySQL (PlanetScale recommended)
+- **Database:** PostgreSQL (Render recommended)
 - **Libraries:** SheetJS (xlsx) for Excel import/export
 - **Fonts:** Google Fonts (Syne, DM Mono, DM Sans)
