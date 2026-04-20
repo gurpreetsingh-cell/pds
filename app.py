@@ -7,7 +7,6 @@ import jwt
 import os
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
-import pytz
 
 load_dotenv()
 
