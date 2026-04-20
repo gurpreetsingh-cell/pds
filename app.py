@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 import bcrypt
 import jwt
 import os
@@ -50,26 +51,36 @@ class Escalation(db.Model):
 @app.route('/health', methods=['GET'])
 def health():
     try:
-        db.session.execute('SELECT 1')
+        db.session.execute(text('SELECT 1'))
         return jsonify({'status': 'ok', 'database': 'connected'})
-    except:
-        return jsonify({'status': 'error', 'database': 'disconnected'}), 500
+    except Exception as e:
+        return jsonify({'status': 'error', 'database': 'disconnected', 'error': str(e)}), 500
+
+@app.route('/api/test', methods=['GET'])
+def test():
+    return jsonify({'status': 'ok', 'message': 'API is working'})
 
 @app.route('/api/login', methods=['POST'])
 def login():
+    print("[DEBUG] Login endpoint called")
     try:
         data = request.get_json()
+        print(f"[DEBUG] Request data: {data}")
         if not data:
             return jsonify({'error': 'No JSON data provided'}), 400
         
         username = data.get('username', '').strip()
         password = data.get('password', '')
+        print(f"[DEBUG] Login attempt for user: {username}")
         
         if not username or not password:
             return jsonify({'error': 'Username and password required'}), 400
 
         user = User.query.filter_by(username=username).first()
+        print(f"[DEBUG] User found: {user is not None}")
+        
         if user and bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+            print("[DEBUG] Password correct, generating token")
             token = jwt.encode({
                 'user_id': user.id,
                 'exp': datetime.utcnow() + timedelta(days=7)
@@ -77,9 +88,14 @@ def login():
             # Ensure token is string type
             if isinstance(token, bytes):
                 token = token.decode('utf-8')
+            print(f"[DEBUG] Token generated: {token[:20]}...")
             return jsonify({'token': str(token), 'user': {'id': user.id, 'username': user.username}})
+        print("[DEBUG] Login failed - invalid credentials")
         return jsonify({'error': 'Invalid credentials'}), 401
     except Exception as e:
+        print(f"[DEBUG] Login error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/register', methods=['POST'])
@@ -253,30 +269,50 @@ def internal_error(error):
 # Static file handlers - MUST come after API routes
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    try:
+        return send_from_directory('.', 'index.html')
+    except Exception as e:
+        return jsonify({'error': 'Cannot serve index.html', 'detail': str(e)}), 500
 
 # Catch-all for static files - but exclude API routes
 @app.route('/<path:path>')
 def static_or_spa(path):
+    print(f"[DEBUG] Catch-all route called for path: {path}")
+    
     # Explicitly block API routes - they should be handled above
     if path.startswith('api/'):
+        print(f"[DEBUG] Blocking API route: {path}")
         return jsonify({'error': 'API endpoint not found'}), 404
     
     try:
         return send_from_directory('.', path)
-    except:
+    except Exception as e:
+        print(f"[DEBUG] File not found: {path}, error: {e}")
         # If file doesn't exist, serve index.html (for SPA routing)
         return send_from_directory('.', 'index.html')
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
-        # Create admin user if doesn't exist
-        if not User.query.filter_by(username='admin').first():
-            password_hash = bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            admin = User(username='admin', password_hash=password_hash)
-            db.session.add(admin)
-            db.session.commit()
-            print("✅ Admin user created")
+        try:
+            db.create_all()
+            print("✅ Database tables created")
+            
+            # Create admin user if doesn't exist
+            try:
+                if not User.query.filter_by(username='admin').first():
+                    password_hash = bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                    admin = User(username='admin', password_hash=password_hash)
+                    db.session.add(admin)
+                    db.session.commit()
+                    print("✅ Admin user created")
+                else:
+                    print("✅ Admin user already exists")
+            except Exception as e:
+                print(f"⚠️  Could not create admin user: {e}")
+                db.session.rollback()
+        except Exception as e:
+            print(f"❌ Database error: {e}")
+    
     port = int(os.getenv('PORT', 5000))
+    print(f"🚀 Starting server on 0.0.0.0:{port}")
     app.run(host='0.0.0.0', port=port, debug=False)
