@@ -642,7 +642,7 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
       <button class="ship-tab" onclick="setTab('tab_open',this)">🔴 Open <span class="tab-count" id="tc_tab_open">0</span></button>
       <button class="ship-tab" onclick="setTab('tab_close',this)">✅ Closed <span class="tab-count" id="tc_tab_close">0</span></button>
       <button class="ship-tab" onclick="setTab('tab_breach',this)">⚠️ TAT Breach <span class="tab-count" id="tc_tab_breach">0</span></button>
-      <button class="ship-tab" id="analyticsTabBtn" onclick="showAnalytics(this)" style="margin-left:auto;background:rgba(124,58,237,.06);border-left:1px solid var(--bd)">📊 Analytics</button>
+      <button class="ship-tab" id="analyticsTabBtn" onclick="showAnalytics(this)" style="margin-left:auto;background:rgba(124,58,237,.06);border-left:1px solid var(--bd);display:none;">📊 Analytics</button>
     </div>
     <!-- Month-wise tabs row -->
     <div id="monthTabsRow" style="display:flex;align-items:center;background:var(--sf);border-bottom:1px solid var(--bd);overflow-x:auto;flex-shrink:0;min-height:34px">
@@ -999,6 +999,20 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
 // ═══════════════ API CONFIG ═══════════════
 const API_BASE = window.location.origin;
 let authToken = null;
+let currentUser = { id: null, username: '', name: 'User', role: 'user' };
+
+function updateAccessUI() {
+  const analyticsBtn = document.getElementById('analyticsTabBtn');
+  const mobileAnalyticsBtn = document.getElementById('mobileAnalyticsBtn');
+  const mgrBtn = document.getElementById('mgrBtn');
+  const uName = document.getElementById('uName');
+  const isAdmin = currentUser?.role === 'admin';
+
+  if (analyticsBtn) analyticsBtn.style.display = isAdmin ? '' : 'none';
+  if (mobileAnalyticsBtn) mobileAnalyticsBtn.style.display = isAdmin ? '' : 'none';
+  if (mgrBtn) mgrBtn.style.display = isAdmin ? '' : 'none';
+  if (uName) uName.innerHTML = `${currentUser.name || 'User'}${isAdmin ? ' <span class="admin-badge">Admin</span>' : ''}`;
+}
 
 // ═══════════════ AUTHENTICATION ═══════════════
 async function apiLogin(username, password) {
@@ -1052,6 +1066,8 @@ async function apiRegister(username, password) {
 
 function logout() {
   authToken = null;
+  currentUser = { id: null, username: '', name: 'User', role: 'user' };
+  updateAccessUI();
   localStorage.removeItem('authToken');
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('appWrap').style.display = 'none';
@@ -1202,11 +1218,12 @@ async function doLogin(){
   const password=document.getElementById('lPass').value;
   try {
     const result = await apiLogin(username, password);
-    currentUser = { id: result.user.id, username: result.user.username, name: username };
+    currentUser = { id: result.user.id, username: result.user.username, name: username, role: result.user.role || (username==='admin' ? 'admin' : 'user') };
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appWrap').style.display='block';
     document.getElementById('uName').textContent=username;
     document.getElementById('uAvatar').textContent=username.charAt(0).toUpperCase();
+    updateAccessUI();
     resetFilters();
     hideAnalytics();
     activeTab='all';
@@ -1255,6 +1272,8 @@ async function restoreSession(){
   const token = localStorage.getItem('authToken');
   if (token) {
     authToken = token;
+    currentUser = { id: null, username: '', name: 'User', role: 'user' };
+    updateAccessUI();
     try {
       await loadEscalations();
       document.getElementById('loginScreen').style.display='none';
@@ -2426,7 +2445,7 @@ function setupMobileUI(){
       <div class="nav-icon">✅</div>
       <div>Closed</div>
     </button>
-    <button class="mobile-nav-btn" onclick="showAnalytics(this)" id="mobileAnalyticsBtn">
+    <button class="mobile-nav-btn" onclick="showAnalytics(this)" id="mobileAnalyticsBtn" style="display:none;">
       <div class="nav-icon">📊</div>
       <div>Analytics</div>
     </button>

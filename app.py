@@ -14,17 +14,49 @@ app = Flask(__name__, static_folder='.')
 CORS(app)
 
 # Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///escalation.db')
+base_dir = os.path.abspath(os.path.dirname(__file__))
+database_url = os.getenv('DATABASE_URL', 'sqlite:///instance/escalation.db')
+
+if database_url.startswith('sqlite:///'):
+    sqlite_path = database_url[len('sqlite:///'):]
+    if sqlite_path != ':memory:' and not os.path.isabs(sqlite_path):
+        sqlite_path = os.path.join(base_dir, sqlite_path)
+        sqlite_path = sqlite_path.replace('\\', '/')
+        database_url = f"sqlite:///{sqlite_path}"
+
+    sqlite_dir = os.path.dirname(sqlite_path)
+    if sqlite_dir and not os.path.exists(sqlite_dir):
+        os.makedirs(sqlite_dir, exist_ok=True)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
 db = SQLAlchemy(app)
+
+from sqlalchemy import inspect
+
+def ensure_user_role_column():
+    with app.app_context():
+        inspector = inspect(db.engine)
+        if 'user' not in inspector.get_table_names():
+            return
+        columns = [col['name'] for col in inspector.get_columns('user')]
+        if 'role' not in columns:
+            if db.engine.dialect.name == 'sqlite':
+                db.session.execute(text("ALTER TABLE user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'"))
+            else:
+                db.session.execute(text('ALTER TABLE "user" ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT \'user\''))
+            db.session.commit()
+
+ensure_user_role_column()
 
 # Models
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default='user')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Escalation(db.Model):
@@ -81,7 +113,7 @@ def login():
             
             return jsonify({
                 'token': str(token),
-                'user': {'id': user.id, 'username': user.username}
+                'user': {'id': user.id, 'username': user.username, 'role': getattr(user, 'role', 'user')}
             }), 200
         
         return jsonify({'error': 'Invalid credentials'}), 401
@@ -103,7 +135,7 @@ def register():
             return jsonify({'error': 'Username already exists'}), 400
 
         password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        user = User(username=username, password_hash=password_hash)
+        user = User(username=username, password_hash=password_hash, role='user')
         db.session.add(user)
         db.session.commit()
 
@@ -114,19 +146,18 @@ def register():
 
 @app.route('/api/escalations', methods=['GET'])
 def get_escalations():
-    """Get all escalations for authenticated user"""
+    """Get all escalations for authenticated users"""
     token = get_token_from_request()
     if not token:
         return jsonify({'error': 'No token provided'}), 401
 
     try:
-        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-        user_id = payload['user_id']
+        jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
     except:
         return jsonify({'error': 'Invalid token'}), 401
 
     try:
-        escalations = Escalation.query.filter_by(user_id=user_id).all()
+        escalations = Escalation.query.order_by(Escalation.created_at.desc()).all()
         return jsonify([{
             'id': e.id,
             'tracking_id': e.tracking_id,
@@ -137,7 +168,8 @@ def get_escalations():
             'description': e.description,
             'status': e.status,
             'created_at': e.created_at.isoformat(),
-            'updated_at': e.updated_at.isoformat()
+            'updated_at': e.updated_at.isoformat(),
+            'user_id': e.user_id
         } for e in escalations]), 200
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
