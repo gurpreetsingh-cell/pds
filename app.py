@@ -14,7 +14,21 @@ app = Flask(__name__, static_folder='.')
 CORS(app)
 
 # Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///escalation.db')
+base_dir = os.path.abspath(os.path.dirname(__file__))
+database_url = os.getenv('DATABASE_URL', 'sqlite:///instance/escalation.db')
+
+if database_url.startswith('sqlite:///'):
+    sqlite_path = database_url[len('sqlite:///'):]
+    if sqlite_path != ':memory:' and not os.path.isabs(sqlite_path):
+        sqlite_path = os.path.join(base_dir, sqlite_path)
+        sqlite_path = sqlite_path.replace('\\', '/')
+        database_url = f"sqlite:///{sqlite_path}"
+
+    sqlite_dir = os.path.dirname(sqlite_path)
+    if sqlite_dir and not os.path.exists(sqlite_dir):
+        os.makedirs(sqlite_dir, exist_ok=True)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
@@ -114,19 +128,18 @@ def register():
 
 @app.route('/api/escalations', methods=['GET'])
 def get_escalations():
-    """Get all escalations for authenticated user"""
+    """Get all escalations for authenticated users"""
     token = get_token_from_request()
     if not token:
         return jsonify({'error': 'No token provided'}), 401
 
     try:
-        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-        user_id = payload['user_id']
+        jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
     except:
         return jsonify({'error': 'Invalid token'}), 401
 
     try:
-        escalations = Escalation.query.filter_by(user_id=user_id).all()
+        escalations = Escalation.query.order_by(Escalation.created_at.desc()).all()
         return jsonify([{
             'id': e.id,
             'tracking_id': e.tracking_id,
@@ -137,7 +150,8 @@ def get_escalations():
             'description': e.description,
             'status': e.status,
             'created_at': e.created_at.isoformat(),
-            'updated_at': e.updated_at.isoformat()
+            'updated_at': e.updated_at.isoformat(),
+            'user_id': e.user_id
         } for e in escalations]), 200
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500

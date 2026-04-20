@@ -1,6 +1,6 @@
 # PDS Escalation Hub
 
-A web-based dashboard for managing and tracking product delivery escalations with PostgreSQL database and cross-device synchronization.
+A web-based dashboard for managing and tracking product delivery escalations with SQLite by default and cross-device synchronization.
 
 ## Features
 
@@ -14,40 +14,33 @@ A web-based dashboard for managing and tracking product delivery escalations wit
 - JWT-based authentication
 - Responsive design
 
-## Quick Start (SQLite - Local Files)
+## Quick Start
 
-### Automatic Setup (Windows)
-1. **Install Python** (if not already installed):
-   - Download from [python.org](https://python.org)
-   - Check "Add Python to PATH" during installation
-
-2. **Install Git** (for version control):
-   - Download from [git-scm.com](https://git-scm.com/download/win)
-   - Install with default settings
-
-3. **Run Setup Scripts**:
+### Local development
+1. Install dependencies:
    ```bash
-   setup.bat        # Install dependencies and create database
-   github-setup.bat # Initialize Git repository
+   pip install -r requirements.txt
    ```
-
-4. **Connect to GitHub** (see GitHub Setup section below)
-
-5. **Start the Server**:
+2. Create the database:
+   ```bash
+   python init_db.py
+   ```
+3. Start the server:
    ```bash
    python app.py
    ```
-
-6. **Open in Browser**:
-   - Go to: http://localhost:5000
+4. Open the app in your browser:
+   - http://localhost:5000
    - Login with: `admin` / `admin123`
 
-### Manual Setup
-```bash
-pip install -r requirements.txt
-python init_db.py
-python app.py
-```
+### Render deployment
+1. Push this repo to GitHub.
+2. On Render, create a new Web Service and connect the repo.
+3. Use these settings:
+   - Build command: `pip install -r requirements.txt`
+   - Start command: `gunicorn app:app`
+   - Environment variables: `SECRET_KEY` and optional `DATABASE_URL`
+4. If you do not set `DATABASE_URL`, the app will use `sqlite:///instance/escalation.db`.
 
 ## GitHub Setup
 
@@ -98,27 +91,15 @@ git status
 
 ### 1. Database Setup
 
-The app uses **SQLite** for local development (file-based database stored in your project folder). For production, you can easily switch to PostgreSQL.
+The app uses **SQLite by default**. On Render, the local file lives at `instance/escalation.db` and keeps data for the running service.
 
-#### Local Development (SQLite - No Setup Required!)
-- Database file: `escalation.db` (created automatically)
-- No external services needed
-- Data persists locally and can be committed to Git
+#### Local Development (SQLite)
+- Database file: `instance/escalation.db` (created automatically)
+- No external database is required
+- The database file is ignored by git
 
-#### Production Deployment (Optional - PostgreSQL)
-Choose one of these PostgreSQL hosting options:
-
-##### Option A: FreeDB (No Signup!)
-1. Go to [FreeDB](https://freedb.tech)
-2. Click "Create Database" → Choose PostgreSQL → Get credentials instantly
-
-##### Option B: Railway
-1. Go to [Railway](https://railway.app) and sign up
-2. Create project → Add PostgreSQL database → Get connection string
-
-##### Option C: PlanetScale
-1. Go to [PlanetScale](https://planetscale.com) and create account
-2. Create database → Get connection string
+#### Optional: External database
+If you want a managed database instead, set `DATABASE_URL` in Render or `.env` to a Postgres or MySQL connection string.
 
 ### 2. Environment Setup
 
@@ -145,10 +126,10 @@ This project is configured for deployment on Render as a web service.
 3. **Configure Build Settings:**
    - **Runtime:** Python 3
    - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `python app.py`
+   - **Start Command:** `gunicorn app:app`
    - Add environment variables in Render dashboard:
-     - `DATABASE_URL`: Your database connection string
      - `SECRET_KEY`: A random secret key for JWT
+     - Optional: `DATABASE_URL` if you want to use an external database
 
 4. **Deploy:**
    - Click "Create Web Service"
@@ -164,11 +145,11 @@ This project is configured for deployment on Render as a web service.
 
 ## Data Storage
 
-The application uses PostgreSQL database for persistent data storage with cross-device synchronization. User authentication is handled via JWT tokens.
+The application uses SQLite by default and stores data in `instance/escalation.db`. On Render, this file is preserved by the service disk. Authentication is handled via JWT tokens.
 
 ## Technologies Used
 
-- **Backend:** Flask, SQLAlchemy, psycopg2-binary, JWT, bcrypt
+- **Backend:** Flask, SQLAlchemy, JWT, bcrypt
 - **Frontend:** HTML5, CSS3, JavaScript (ES6+)
 - **Database:** PostgreSQL (Render recommended)
 - **Libraries:** SheetJS (xlsx) for Excel import/export
