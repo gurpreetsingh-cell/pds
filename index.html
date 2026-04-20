@@ -996,6 +996,157 @@ td{padding:9px 10px;font-size:12px;vertical-align:middle}
 <div id="tc"></div>
 
 <script>
+// ═══════════════ API CONFIG ═══════════════
+const API_BASE = window.location.origin;
+let authToken = null;
+
+// ═══════════════ AUTHENTICATION ═══════════════
+async function apiLogin(username, password) {
+  try {
+    const response = await fetch(`${API_BASE}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await response.json();
+    if (response.ok) {
+      authToken = data.token;
+      localStorage.setItem('authToken', authToken);
+      return data;
+    } else {
+      throw new Error(data.error || 'Login failed');
+    }
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function apiRegister(username, password) {
+  try {
+    const response = await fetch(`${API_BASE}/api/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Registration failed');
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+function logout() {
+  authToken = null;
+  localStorage.removeItem('authToken');
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appWrap').style.display = 'none';
+}
+
+// ═══════════════ API CALLS ═══════════════
+async function apiCall(endpoint, options = {}) {
+  const headers = { ...options.headers };
+  if (authToken) headers['Authorization'] = authToken;
+  if (options.body && typeof options.body === 'object') {
+    headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(options.body);
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    if (response.status === 401) {
+      logout();
+      throw new Error('Session expired. Please login again.');
+    }
+    return response;
+  } catch (error) {
+    console.error('API call failed:', error);
+    throw error;
+  }
+}
+
+async function loadEscalations() {
+  const response = await apiCall('/api/escalations');
+  if (response.ok) {
+    data = await response.json();
+    // Convert API format to local format
+    data = data.map(e => ({
+      id: e.id,
+      ts: new Date(e.created_at).getTime(),
+      date: new Date(e.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: new Date(e.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      client: e.customer_name,
+      dcName: '', // Not in API
+      courier: '', // Not in API
+      order: e.tracking_id,
+      awb: e.tracking_id,
+      payment: '', // Not in API
+      modeOfEsc: '', // Not in API
+      type: e.issue_type,
+      remarks: e.description,
+      status: e.status,
+      addedBy: 'API User', // Not in API
+      addedByUser: '', // Not in API
+      currentStatus: '', // Not in API
+      updatedAt: new Date(e.updated_at).getTime()
+    }));
+  } else {
+    data = [];
+  }
+}
+
+async function createEscalation(escalation) {
+  const response = await apiCall('/api/escalations', {
+    method: 'POST',
+    body: {
+      tracking_id: escalation.awb,
+      customer_name: escalation.client,
+      phone: '',
+      email: '',
+      issue_type: escalation.type,
+      description: escalation.remarks
+    }
+  });
+  if (response.ok) {
+    const newEsc = await response.json();
+    await loadEscalations(); // Reload data
+    return newEsc;
+  } else {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to create escalation');
+  }
+}
+
+async function updateEscalation(id, updates) {
+  const response = await apiCall(`/api/escalations/${id}`, {
+    method: 'PUT',
+    body: {
+      tracking_id: updates.awb,
+      customer_name: updates.client,
+      issue_type: updates.type,
+      description: updates.remarks,
+      status: updates.status
+    }
+  });
+  if (response.ok) {
+    await loadEscalations(); // Reload data
+    return await response.json();
+  } else {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to update escalation');
+  }
+}
+
+async function deleteEscalation(id) {
+  const response = await apiCall(`/api/escalations/${id}`, { method: 'DELETE' });
+  if (response.ok) {
+    await loadEscalations(); // Reload data
+  } else {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to delete escalation');
+  }
+}
+
 // ═══════════════ STATE ═══════════════
 let data = [];
 let activity = [];
@@ -1009,61 +1160,43 @@ let activeMonth = 'all'; // 'all' or 'YYYY-MM'
 let statFilter = 'open';
 let nCount = 0;
 let excelRows=[], excelHdrs=[];
-let driveRows=[], driveHdrs=[];
-let currentUser = null;
 
 const FIELDS=['client','dcName','modeOfEsc','awb','order','payment','type','remarks'];
 const FLABELS={client:'Client Name',dcName:'DC Name',modeOfEsc:'Mode of Escalation',awb:'AWB No. (Mandatory)',order:'Order No. (Optional)',payment:'Payment Mode',type:'Escalation Type',remarks:'Action / Remarks'};
 const AUTO_MAP={client:['client','client name','customer','name'],dcName:['dc name','dcname','dc','distribution center','warehouse'],modeOfEsc:['mode of escalation','mode of esc.','escalation mode','escalation channel','mode','escalation source'],courier:['courier','courier name'],order:['order','order no','order no.','order_no','order number'],awb:['awb','awb no','awb no.','awb number','tracking'],payment:['payment','payment mode'],type:['type','escalation type','issue type'],remarks:['remarks','action','action/remarks','notes','comments']};
 const TAT_HOURS = 72;
 
-// ═══════════════ USERS ═══════════════
-function loadUsers(){
-  const def=[{id:'u1',name:'Admin',username:'admin',password:'admin123',role:'admin'},{id:'u2',name:'Swati',username:'swati',password:'swati123',role:'user'},{id:'u3',name:'Urbanic',username:'urbanic',password:'urbanic123',role:'urbanic'}];
-  try{ return JSON.parse(localStorage.getItem('esc_users'))||def; }catch(e){ return def; }
-}
-function saveUsers(u){ try{ localStorage.setItem('esc_users',JSON.stringify(u)); }catch(e){} }
-
 // ═══════════════ LOGIN ═══════════════
-function doLogin(){
+async function doLogin(){
   const username=document.getElementById('lUser').value.trim();
   const password=document.getElementById('lPass').value;
-  const users=loadUsers();
-  const user=users.find(u=>u.username===username&&u.password===password);
-  if(!user){ document.getElementById('lErr').style.display='block'; document.getElementById('lUser').classList.add('err'); document.getElementById('lPass').classList.add('err'); return; }
-  currentUser=user;
-  try{ sessionStorage.setItem('esc_session',JSON.stringify({id:user.id,username:user.username,name:user.name,role:user.role})); }catch(e){}
-  document.getElementById('loginScreen').style.display='none';
-  document.getElementById('appWrap').style.display='block';
-  document.getElementById('uName').textContent=user.name;
-  document.getElementById('uAvatar').textContent=user.name.charAt(0).toUpperCase();
-  if(user.role==='admin') document.getElementById('mgrBtn').style.display='';
-  if(user.role==='urbanic'){ document.getElementById('exportWrap').style.display='none'; document.getElementById('mgrBtn').style.display='none'; }
-  else { document.getElementById('exportWrap').style.display=''; }
-  resetFilters();
-  hideAnalytics();
-  activeTab='all';
-  document.getElementById('tableTitle').textContent='📋 All Escalations';
-  document.querySelectorAll('.ship-tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');});
-  if(isMobileView){ document.querySelectorAll('.mobile-nav-btn').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); }
-  populateActFilter();
-  render(); updateStats(); updateTabs(); renderActivity();
+  try {
+    const result = await apiLogin(username, password);
+    currentUser = { id: result.user.id, username: result.user.username, name: username };
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('appWrap').style.display='block';
+    document.getElementById('uName').textContent=username;
+    document.getElementById('uAvatar').textContent=username.charAt(0).toUpperCase();
+    resetFilters();
+    hideAnalytics();
+    activeTab='all';
+    document.getElementById('tableTitle').textContent='📋 All Escalations';
+    document.querySelectorAll('.ship-tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');});
+    await loadEscalations();
+    render(); updateStats(); updateTabs();
+  } catch (error) {
+    document.getElementById('lErr').textContent = error.message;
+    document.getElementById('lErr').style.display='block';
+    document.getElementById('lUser').classList.add('err');
+    document.getElementById('lPass').classList.add('err');
+  }
 }
+
 function doLogout(){
-  currentUser=null;
-  try{ sessionStorage.removeItem('esc_session'); }catch(e){}
-  document.getElementById('loginScreen').style.display='flex';
-  document.getElementById('appWrap').style.display='none';
-  document.getElementById('lUser').value=''; document.getElementById('lPass').value='';
-  document.getElementById('lErr').style.display='none';
-  ['lUser','lPass'].forEach(id=>document.getElementById(id).classList.remove('err'));
+  logout();
 }
 
 // ═══════════════ DATA ═══════════════
-try{ data=JSON.parse(localStorage.getItem('esc_v4')||'[]'); }catch(e){}
-try{ activity=JSON.parse(localStorage.getItem('esc_act')||'[]'); }catch(e){}
-function save(){ try{ localStorage.setItem('esc_v4',JSON.stringify(data)); }catch(e){} }
-function saveAct(){ try{ localStorage.setItem('esc_act',JSON.stringify(activity)); }catch(e){} }
 function genId(){ return 'ESC-'+Date.now().toString(36).toUpperCase().slice(-7); }
 function fmtDate(ts){ return new Date(ts).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); }
 function fmtTime(ts){ return new Date(ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}); }
@@ -1088,39 +1221,26 @@ tick(); setInterval(tick,1000);
 // Backdrop close
 ['newMO','upMO','bulkMO','umMO','viewMO'].forEach(id=>document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeMo(id);}));
 
-function restoreSession(){
-  try{
-    const s=JSON.parse(sessionStorage.getItem('esc_session'));
-    if(s&&s.id){
-      const users=loadUsers(); const user=users.find(u=>u.id===s.id);
-      if(user){
-        currentUser=user;
-        document.getElementById('loginScreen').style.display='none';
-        document.getElementById('appWrap').style.display='block';
-        document.getElementById('uName').textContent=user.name;
-        document.getElementById('uAvatar').textContent=user.name.charAt(0).toUpperCase();
-        document.getElementById('analyticsTabBtn').style.display = user.role==='admin' ? '' : 'none';
-        if(user.role==='admin') document.getElementById('mgrBtn').style.display='';
-        if(user.role==='urbanic'){
-          document.getElementById('exportWrap').style.display='none';
-          document.getElementById('mgrBtn').style.display='none';
-        } else {
-          document.getElementById('exportWrap').style.display='';
-        }
-        resetFilters();
-        hideAnalytics();
-        activeTab='all';
-        document.getElementById('tableTitle').textContent='📋 All Escalations';
-        document.querySelectorAll('.ship-tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');});
-        if(isMobileView){ document.querySelectorAll('.mobile-nav-btn').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');}); }
-        populateActFilter();
-        render();
-        updateStats();
-        updateTabs();
-        renderActivity();
-      }
+async function restoreSession(){
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    authToken = token;
+    try {
+      await loadEscalations();
+      document.getElementById('loginScreen').style.display='none';
+      document.getElementById('appWrap').style.display='block';
+      document.getElementById('uName').textContent='User';
+      document.getElementById('uAvatar').textContent='U';
+      resetFilters();
+      hideAnalytics();
+      activeTab='all';
+      document.getElementById('tableTitle').textContent='📋 All Escalations';
+      document.querySelectorAll('.ship-tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');});
+      render(); updateStats(); updateTabs();
+    } catch (error) {
+      logout();
     }
-  }catch(e){}
+  }
 }
 
 // ═══════════════ USER MANAGER ═══════════════
@@ -1157,7 +1277,7 @@ function populateActFilter(){
 
 // ═══════════════ ACTIVITY ═══════════════
 function logAct(type,title,msg){
-  const entry={type,title,msg,user:currentUser?.name||'System',username:currentUser?.username||'system',ts:Date.now()};
+  const entry={type,title,msg,user:currentUser?.name||'API User',username:currentUser?.username||'apiuser',ts:Date.now()};
   activity.unshift(entry); if(activity.length>500) activity=activity.slice(0,500); saveAct(); renderActivity();
 }
 function renderActivity(){
@@ -1239,7 +1359,7 @@ function openNewModal(){
   const now=new Date();
   document.getElementById('nDate').value=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
   document.getElementById('nTime').value=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-  document.getElementById('nLoggedBy').value=currentUser?currentUser.name+' (@'+currentUser.username+')':'Unknown';
+  document.getElementById('nLoggedBy').value='API User';
   ['nClient','nDcName','nOrder','nAwb','nRemarks'].forEach(id=>{const el=document.getElementById(id);el.value='';el.classList.remove('err');});
   document.getElementById('nAwbErr').style.display='none';
   document.getElementById('nModeErr').style.display='none';
@@ -1252,27 +1372,29 @@ function openNewModal(){
   document.getElementById('nSubmitBtn').disabled=true;
   openMo('newMO');
 }
-function submitNew(){
+async function submitNew(){
   const client=document.getElementById('nClient').value.trim();
-  const dcName=document.getElementById('nDcName').value.trim();
   const awb=document.getElementById('nAwb').value.trim();
   const remarks=document.getElementById('nRemarks').value.trim();
-  if(!client||!dcName||!awb||!remarks){toast('t-err','⚠️ Missing Fields','Client, DC Name, AWB and Remarks are required.');return;}
+  if(!client||!awb||!remarks){toast('t-err','⚠️ Missing Fields','Client, AWB and Remarks are required.');return;}
   if(!newMode){
     document.getElementById('nModeErr').style.display='block';
     toast('t-err','⚠️ Mode Required','Please select a Mode of Escalation (WhatsApp / Email / Drive).');
     return;
   }
-  const dupAwb=data.some(e=>e.awb&&e.awb.trim().toLowerCase()===awb.toLowerCase());
-  if(dupAwb){toast('t-err','🚫 Duplicate Entry','This AWB has already been escalated. Please avoid re-submission.');return;}
-  const ts=Date.now();
-  const order=document.getElementById('nOrder').value.trim();
-  const e={id:genId(),ts,date:fmtDate(ts),time:fmtTime(ts),client,dcName,courier:'',order:order||'—',awb,payment:document.getElementById('nPayment').value,modeOfEsc:newMode,type:newType,remarks,status:'open',addedBy:currentUser?.name||'Unknown',addedByUser:currentUser?.username||''};
-  data.unshift(e); save(); closeMo('newMO');
-  logAct('n-new',`🚨 ${client}`,`${newType} · AWB: ${awb}`);
-  nCount++; document.getElementById('nc').textContent=nCount;
-  toast('t-err','🚨 Escalation Logged',`${client} — ${newType}`);
-  render(); updateStats(); updateTabs();
+  try {
+    const escalation = {
+      client, awb, remarks, type: newType, modeOfEsc: newMode,
+      order: document.getElementById('nOrder').value.trim(),
+      payment: document.getElementById('nPayment').value
+    };
+    await createEscalation(escalation);
+    closeMo('newMO');
+    toast('t-err','🚨 Escalation Logged',`${client} — ${newType}`);
+    render(); updateStats(); updateTabs();
+  } catch (error) {
+    toast('t-err','❌ Error',error.message);
+  }
 }
 
 // ═══════════════ VIEW MODAL ═══════════════
@@ -1334,35 +1456,41 @@ function openUpdateModal(id){
   document.getElementById('uSubmitBtn').disabled=true;
   openMo('upMO');
 }
-function saveUpdate(){
+async function saveUpdate(){
   const remarks=document.getElementById('uRemarks').value.trim();
   const currentStatus=document.getElementById('uCurrentStatus').value.trim();
   if(!remarks){document.getElementById('uRemarks').classList.add('err');toast('t-err','⚠️ Remarks Required','Action/Remarks cannot be empty.');return;}
-  if(!currentStatus){document.getElementById('uCurrentStatus').classList.add('err');toast('t-err','⚠️ Current Status Required','Please enter the current working status.');return;}
-  const e=data.find(x=>x.id===selId); if(!e) return;
+  const e=data.find(x=>x.id==selId); if(!e) return;
   const wasOpen=e.status==='open';
-  e.client=document.getElementById('uClient').value.trim()||e.client;
-  e.courier=document.getElementById('uCourier').value.trim();
-  e.order=document.getElementById('uOrder').value.trim()||e.order;
-  e.awb=document.getElementById('uAwb').value.trim();
-  e.payment=document.getElementById('uPayment').value;
-  e.type=upType; e.remarks=remarks; e.currentStatus=currentStatus;
-  if(wasOpen && mStatus==='close') e.closedAt=Date.now();
-  e.status=mStatus; e.updatedAt=Date.now(); e.updatedBy=currentUser?.name||'Unknown';
-  save(); closeMo('upMO');
-  const actType=wasOpen&&mStatus==='close'?'n-close':'n-update';
-  logAct(actType,wasOpen&&mStatus==='close'?`✅ Closed: ${e.client}`:`✏️ Updated: ${e.client}`,`${e.type} · ${e.order}`);
-  nCount++; document.getElementById('nc').textContent=nCount;
-  if(wasOpen&&mStatus==='close') toast('t-ok','✅ Escalation Closed',`${e.client} — ${e.order}`);
-  else toast('t-ok','💾 Updated',`${e.client} — ${e.order}`);
-  render(); updateStats(); updateTabs();
+  try {
+    await updateEscalation(selId, {
+      client: document.getElementById('uClient').value.trim(),
+      order: document.getElementById('uOrder').value.trim(),
+      awb: document.getElementById('uAwb').value.trim(),
+      payment: document.getElementById('uPayment').value,
+      type: upType,
+      remarks,
+      status: mStatus
+    });
+    closeMo('upMO');
+    if(wasOpen&&mStatus==='close') toast('t-ok','✅ Escalation Closed',`${e.client} — ${e.order}`);
+    else toast('t-ok','💾 Updated',`${e.client} — ${e.order}`);
+    render(); updateStats(); updateTabs();
+  } catch (error) {
+    toast('t-err','❌ Error',error.message);
+  }
 }
 
-function delEntry(id,ev){
+async function delEntry(id,ev){
   ev.stopPropagation();
   if(!confirm('Delete this escalation? This cannot be undone.')) return;
-  data=data.filter(x=>x.id!==id); save(); render(); updateStats(); updateTabs();
-  toast('t-info','🗑️ Deleted','Escalation removed.');
+  try {
+    await deleteEscalation(id);
+    render(); updateStats(); updateTabs();
+    toast('t-info','🗑️ Deleted','Escalation removed.');
+  } catch (error) {
+    toast('t-err','❌ Error',error.message);
+  }
 }
 
 // ═══════════════ BULK ═══════════════
