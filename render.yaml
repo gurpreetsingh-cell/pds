@@ -6,4 +6,6 @@ services:
     startCommand: gunicorn app:app
     envVars:
       - key: SECRET_KEY
-        value: CHANGE_THIS_TO_A_SECURE_RANDOM_STRING_IN_PRODUCTION
+        value: your-secret-key
+      - key: DATABASE_URL
+        value: sqlite:///instance/escalation.db
