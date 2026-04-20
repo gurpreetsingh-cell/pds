@@ -3,14 +3,9 @@ services:
     name: pds-escalation-hub
     runtime: python3
     buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    startCommand: gunicorn app:app
     envVars:
       - key: DATABASE_URL
         value: mysql+pymysql://your_mysql_username:your_mysql_password@your_mysql_host:3306/your_database_name
       - key: SECRET_KEY
         value: your-super-secret-key-change-this-in-production
-    routes:
-      - type: redirect
-        source: /api/*
-        destination: /404.html
-        status: 404
