@@ -1312,8 +1312,12 @@ function getTAT(e){
   return {label:Math.round(TAT_HOURS-hrs)+'h left',cls:'tat-ok',pct};
 }
 
-// Clock
-function tick(){ const n=new Date(); document.getElementById('hdrClock').textContent=n.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})+' · '+n.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}); }
+// Clock - IST timezone
+function tick(){ 
+  const n=new Date();
+  const istTime = new Date(n.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  document.getElementById('hdrClock').textContent=istTime.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})+' · '+istTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})+' IST'; 
+}
 tick(); setInterval(tick,1000);
 
 // Backdrop close
@@ -1666,11 +1670,24 @@ async function confirmImport(){
   
   // Extract escalations from rows
   let escalations = [];
+  const awbNumbers = new Set();
+  const duplicateAwbs = [];
+  
   excelRows.forEach((r,i)=>{ 
     const get=f=>maps[f]>=0?String(r[maps[f]]??'').trim():''; 
     const client=get('client'); 
     const order=get('order'); 
     if(!client&&!order) return; 
+    
+    const awb = get('awb') || get('order') || `ROW-${i+1}`;
+    
+    // Check for duplicates within the upload
+    if(awbNumbers.has(awb.toLowerCase())) {
+      duplicateAwbs.push(awb);
+    } else {
+      awbNumbers.add(awb.toLowerCase());
+    }
+    
     const rawType=get('type').toLowerCase(); 
     let type='Delay Delivery'; 
     if(rawType.includes('damage')) type='Damaged Delivery'; 
@@ -1685,7 +1702,7 @@ async function confirmImport(){
     else if(rawType&&!rawType.includes('delay')) type='Other'; 
     
     escalations.push({
-      tracking_id: get('awb') || get('order') || `ROW-${i+1}`,
+      tracking_id: awb,
       customer_name: client || 'Unknown',
       phone: '',
       email: '',
@@ -1693,6 +1710,12 @@ async function confirmImport(){
       description: get('remarks') || 'Imported via Bulk Upload'
     });
   });
+  
+  // If duplicates found, show error and don't import
+  if(duplicateAwbs.length > 0) {
+    toast('t-err','❌ Invalid Format','Bulk upload has invalid format (contains duplicate AWB number): ' + duplicateAwbs.slice(0,3).join(', ') + (duplicateAwbs.length > 3 ? `, ...` : ''));
+    return;
+  }
   
   // Post each escalation to backend
   let count = 0;
