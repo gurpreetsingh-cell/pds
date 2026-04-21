@@ -1133,10 +1133,13 @@ async function loadEscalations() {
         // Convert API format to local format with correct IST timezone
         data = data.map(e => {
           const createdDate = new Date(e.created_at);
-          const istTime = new Date(createdDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          // Add IST offset (UTC+5:30 = 5.5 hours) to UTC timestamp
+          const istOffset = 5.5 * 60 * 60 * 1000;
+          const istTimestamp = createdDate.getTime() + istOffset;
+          const istTime = new Date(istTimestamp);
           return {
             id: e.id,
-            ts: istTime.getTime(),
+            ts: istTimestamp,
             date: istTime.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
             time: istTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
             client: e.customer_name,
@@ -1152,7 +1155,7 @@ async function loadEscalations() {
             addedBy: currentUser.username || 'API User',
             addedByUser: currentUser.username || '', // Use actual logged-in username
             currentStatus: '', // Not in API
-            updatedAt: istTime.getTime(),
+            updatedAt: istTimestamp,
             userId: e.user_id
           };
         });
@@ -1296,8 +1299,16 @@ function doLogout(){
 
 // ═══════════════ DATA ═══════════════
 function genId(){ return 'ESC-'+Date.now().toString(36).toUpperCase().slice(-7); }
-function fmtDate(ts){ return new Date(ts).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); }
-function fmtTime(ts){ return new Date(ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}); }
+function fmtDate(ts){ 
+  const d = new Date(ts);
+  const istDate = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  return istDate.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); 
+}
+function fmtTime(ts){ 
+  const d = new Date(ts);
+  const istDate = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  return istDate.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}); 
+}
 function typeClass(t){
   const m={'Delay Delivery':'delay-delivery','Damaged Delivery':'damaged-delivery','Empty Packet':'empty-packet','Extra Charge':'extra-charge','Fake Delivery':'fake-delivery','Missing Article':'missing-article','Wrong Product Delivered':'wrong-product','Order Swapped':'order-swapped','Shipment Handover but Not Connected':'shipment-handover','Order delivered but marked RTO':'delivered-marked-rto','Other':'other'};
   return m[t]||'other';
@@ -1404,8 +1415,10 @@ function renderActivity(){
   const items=filter==='all'?activity:activity.filter(a=>a.username===filter);
   if(!items.length){ panel.innerHTML='<div style="text-align:center;padding:24px 16px;color:var(--mt);font-size:11px;font-family:\'DM Mono\',monospace">No activity yet</div>'; return; }
   panel.innerHTML=items.map(a=>{
-    const ts=new Date(a.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-    const dt=new Date(a.ts).toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
+    const aDate = new Date(a.ts);
+    const aIstTime = new Date(aDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const ts=aIstTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+    const dt=aIstTime.toLocaleDateString('en-IN',{day:'2-digit',month:'short'});
     return `<div class="notif ${a.type}"><div class="notif-top"><span class="nt">${a.type==='n-new'?'🚨 NEW':a.type==='n-close'?'✅ CLOSED':a.type==='n-update'?'✏️ UPDATE':'📤 BULK'}</span><span class="ntime">${dt} ${ts}</span></div><div class="nm">${a.title}</div><div class="nawb">${a.msg}</div><div class="n-user-tag">👤 ${a.user}</div></div>`;
   }).join('');
 }
@@ -1475,8 +1488,9 @@ function validateUpdate(){
 // ═══════════════ NEW ESCALATION ═══════════════
 function openNewModal(){
   const now=new Date();
-  document.getElementById('nDate').value=now.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
-  document.getElementById('nTime').value=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+  const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  document.getElementById('nDate').value=istTime.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  document.getElementById('nTime').value=istTime.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
   document.getElementById('nLoggedBy').value='API User';
   ['nClient','nDcName','nOrder','nAwb','nRemarks'].forEach(id=>{const el=document.getElementById(id);el.value='';el.classList.remove('err');});
   document.getElementById('nAwbErr').style.display='none';
@@ -1711,9 +1725,23 @@ async function confirmImport(){
     });
   });
   
-  // If duplicates found, show error and don't import
+  // If duplicates within the file found, show error and don't import
   if(duplicateAwbs.length > 0) {
-    toast('t-err','❌ Invalid Format','Bulk upload has invalid format (contains duplicate AWB number): ' + duplicateAwbs.slice(0,3).join(', ') + (duplicateAwbs.length > 3 ? `, ...` : ''));
+    toast('t-err','❌ Duplicate AWBs in File','Bulk upload has duplicate AWB numbers within the file: ' + duplicateAwbs.slice(0,3).join(', ') + (duplicateAwbs.length > 3 ? `, ...` : ''));
+    return;
+  }
+  
+  // Check for duplicates against existing escalations in the system
+  const existingAwbs = new Set(data.map(e => (e.awb || '').toLowerCase()).filter(a => a));
+  const existingDuplicates = [];
+  awbNumbers.forEach(awb => {
+    if(existingAwbs.has(awb)) {
+      existingDuplicates.push(awb);
+    }
+  });
+  
+  if(existingDuplicates.length > 0) {
+    toast('t-err','❌ AWB Already Exists','The following AWB numbers already exist in the system: ' + existingDuplicates.slice(0,3).join(', ') + (existingDuplicates.length > 3 ? `, ...` : ''));
     return;
   }
   
@@ -1815,7 +1843,7 @@ function render(){
   if(!rows.length){tb.innerHTML=`<tr><td colspan="15"><div class="empty"><div class="empty-ico">📭</div>No escalations found</div></td></tr>`;return;}
   tb.innerHTML=rows.map((e,i)=>{
     const isOpen=e.status==='open'; const tc=typeClass(e.type); const tat=getTAT(e);
-    const dt=e.date+(e.time?`<br><span style="font-size:10px;color:var(--mt)">${e.time}</span>`:'');
+    const dt=fmtDate(e.ts)+(e.ts?`<br><span style="font-size:10px;color:var(--mt)">${fmtTime(e.ts)}</span>`:'');
     return `<tr class="${isOpen?'open-row':''}">
       <td class="mono" style="font-size:10px;color:var(--mt)">${i+1}</td>
       <td class="mono" style="font-size:11px;white-space:nowrap;line-height:1.5">${dt}</td>
@@ -2088,7 +2116,11 @@ function renderAnalytics(){
   </div>`;
 
   // ── Daily trend (last 14 days) ──
-  const days14=[]; const today=new Date(); today.setHours(0,0,0,0);
+  const days14=[]; 
+  const nowDate = new Date();
+  const istNowDate = new Date(nowDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const today = new Date(istNowDate);
+  today.setHours(0,0,0,0);
   for(let i=13;i>=0;i--){ const dd=new Date(today); dd.setDate(dd.getDate()-i); days14.push(dd); }
   const dayData=days14.map(dd=>{
     const next=new Date(dd); next.setDate(next.getDate()+1);
